@@ -12,7 +12,6 @@ import (
 	"net/rpc"
 	"syscall"
 
-	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/config"
 	"github.com/sylabs/singularity/src/runtime/engines/config/starter"
 	"github.com/sylabs/singularity/src/runtime/engines/imgbuild"
@@ -95,7 +94,6 @@ var (
 
 // ServeRuntimeEngineRequests serves runtime engine requests with corresponding registered engine methods.
 func ServeRuntimeEngineRequests(name string, conn net.Conn) {
-	sylog.Debugf("%s", name)
 	methods := registeredEngineRPCMethods[name]
 	rpc.RegisterName(name, methods)
 	rpc.ServeConn(conn)

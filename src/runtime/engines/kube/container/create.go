@@ -17,7 +17,7 @@ import (
 
 // CreateContainer creates a container. This method is called in the same
 // namespaces as target container and used for proper namespaces initialization.
-func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
+func (e *EngineOperations) CreateContainer(pid int, rpcConn net.Conn) error {
 	sylog.Debugf("setting up container %q", e.containerName)
 
 	rpcOps := &client.RPC{
@@ -28,7 +28,7 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 	if e.security != nil && e.security.NamespaceOptions != nil &&
 		e.security.NamespaceOptions.Pid != v1alpha2.NamespaceMode_NODE {
 		sylog.Debugf("mounting procfs")
-		_, err := rpcOps.Mount("/proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV, "")
+		_, err := rpcOps.Mount("proc", "/proc", "proc", syscall.MS_NOSUID, "")
 		if err != nil {
 			return fmt.Errorf("could not mount proc fs: %s", err)
 		}
@@ -36,19 +36,20 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 	sylog.Debugf("mounting dev")
 	_, err := rpcOps.Mount("/dev", "/dev", "udev", syscall.MS_NOSUID|syscall.MS_BIND, "")
 	if err != nil {
-		return fmt.Errorf("could not mount proc fs: %s", err)
+		return fmt.Errorf("could not mount udev: %s", err)
 	}
-
-	wd, err := os.Getwd()
+	sylog.Debugf("mounting sysfs")
+	_, err = rpcOps.Mount("sysfs", "/sys", "sysfs", syscall.MS_NOSUID, "")
 	if err != nil {
-		return fmt.Errorf("could not get wd: %v", err)
+		return fmt.Errorf("could not mount sysfs: %s", err)
+	}
+	sylog.Debugf("mounting tmpfs into /mnt")
+	_, err = rpcOps.Mount("tmpfs", "/mnt", "tmpfs", syscall.MS_NOSUID, "")
+	if err != nil {
+		return fmt.Errorf("could not mount tmpfs into /mnt: %s", err)
 	}
 
-	for _, env := range e.containerConfig.Envs {
-		os.Setenv(env.Key, env.Value)
-	}
-
-	imagePath := "/var/lib/singularity/6a7401b8024a9b50c313d1347dbcb63fb5530577121e5d14832a2105ad3a8cc9"
+	imagePath := e.containerConfig.Image.Image
 	file, err := os.Open(imagePath)
 	if err != nil {
 		return fmt.Errorf("could not open image: %v", err)
@@ -95,26 +96,27 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 	}
 	sylog.Debugf("loop device is %d", dev)
 
-	if _, err := os.Stat("new-root"); os.IsNotExist(err) {
-		_, err = rpcOps.Mkdir("new-root", os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("could not create dir: %v", err)
-		}
+	_, err = rpcOps.Mkdir("/mnt/"+e.containerName, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("could not make rootfs temp dir: %v", err)
 	}
-	ll(wd)
-	ll("/dev")
-
-	_, err = rpcOps.Mount(fmt.Sprintf("/dev/loop%d", dev), wd+"/new-root", mountType, syscall.MS_NOSUID|syscall.MS_BIND, "")
+	_, err = rpcOps.Mount(fmt.Sprintf("/dev/loop%d", dev), "/mnt/"+e.containerName, mountType, syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount loop device: %v", err)
 	}
 
-	ll("/home")
-	ll("/home/sashayakovtseva")
-	//rootfsPath := "/home/sashayakovtseva/go/src/github.com/sylabs/singularity/builddir/busybox"
-	_, err = rpcOps.Chroot("new-root")
+	_, err = rpcOps.Mkdir("/mnt/final", os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("could not chroot into busybox: %v", err)
+		return fmt.Errorf("could not make final temp dir: %v", err)
+	}
+	_, err = rpcOps.Mount("/mnt/"+e.containerName, "/mnt/final", "", syscall.MS_NOSUID|syscall.MS_BIND, "")
+	if err != nil {
+		return fmt.Errorf("could not mount to final: %v", err)
+	}
+
+	_, err = rpcOps.Chroot("/mnt/final")
+	if err != nil {
+		return fmt.Errorf("could not chroot: %v", err)
 	}
 	ll("/")
 

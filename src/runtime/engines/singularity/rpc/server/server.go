@@ -15,6 +15,8 @@ import (
 
 	"github.com/sylabs/singularity/src/pkg/util/mainthread"
 
+	"io/ioutil"
+
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/pkg/util/loop"
 	args "github.com/sylabs/singularity/src/runtime/engines/singularity/rpc"
@@ -43,6 +45,9 @@ func (t *Methods) Mkdir(arguments *args.MkdirArgs, reply *int) (err error) {
 
 // Chroot performs a chroot with the specified arguments
 func (t *Methods) Chroot(arguments *args.ChrootArgs, reply *int) error {
+	mounts, _ := ioutil.ReadFile("/proc/self/mounts")
+	sylog.Debugf("mounts: %s", mounts)
+
 	// idea taken from libcontainer (and also LXC developpers) to avoid
 	// creation of temporary directory or use of existing directory
 	// for pivot_root
