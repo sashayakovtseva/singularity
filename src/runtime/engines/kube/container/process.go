@@ -31,6 +31,9 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	sylog.Debugf("%s\n%v", resolv, err)
 
 	ll("/")
+	ll("/dev")
+	ll("/tmp")
+	ll("/proc")
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals)

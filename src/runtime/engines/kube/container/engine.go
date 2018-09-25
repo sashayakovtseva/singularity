@@ -50,6 +50,7 @@ func (e *EngineOperations) Config() interface{} {
 func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error {
 	sylog.Debugf("preparing config for container %q", e.containerName)
 	conf.SetInstance(true)
+	conf.SetMountPropagation("shared")
 
 	podInst, err := instance.Get(e.createContainerRequest.PodSandboxId)
 	if err != nil {
