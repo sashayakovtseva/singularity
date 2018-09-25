@@ -21,30 +21,27 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/sylabs/singularity/src/runtime/engines/config/starter"
-
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/pkg/util/mainthread"
 	"github.com/sylabs/singularity/src/runtime/engines"
+	"github.com/sylabs/singularity/src/runtime/engines/config/starter"
 )
 
 // SMaster initializes a runtime engine and runs it
-func SMaster(socket int, masterSocket int, starterConfig *starter.Config, jsonBytes []byte) {
+func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonBytes []byte) {
 	var fatal error
 	var status syscall.WaitStatus
 
 	fatalChan := make(chan error, 1)
 	ppid := os.Getppid()
-
 	containerPid := starterConfig.GetContainerPid()
-
 	engine, err := engines.NewEngine(jsonBytes)
 	if err != nil {
 		sylog.Fatalf("failed to initialize runtime: %s\n", err)
 	}
 
 	go func() {
-		comm := os.NewFile(uintptr(socket), "socket")
+		comm := os.NewFile(uintptr(rpcSocket), "socket")
 		conn, err := net.FileConn(comm)
 		if err != nil {
 			fatalChan <- fmt.Errorf("failed to copy unix socket descriptor: %s", err)
@@ -63,7 +60,6 @@ func SMaster(socket int, masterSocket int, starterConfig *starter.Config, jsonBy
 
 	go func() {
 		data := make([]byte, 1)
-
 		comm := os.NewFile(uintptr(masterSocket), "master-socket")
 		conn, err := net.FileConn(comm)
 		comm.Close()
@@ -77,7 +73,7 @@ func SMaster(socket int, masterSocket int, starterConfig *starter.Config, jsonBy
 				fatalChan <- fmt.Errorf("post start process failed: %s", err)
 			} else {
 				if starterConfig.GetInstance() {
-					/* sleep a bit to see if child exit */
+					// sleep a bit to see if child exit
 					time.Sleep(100 * time.Millisecond)
 					if os.Getppid() == ppid {
 						syscall.Kill(ppid, syscall.SIGUSR1)
@@ -97,7 +93,6 @@ func SMaster(socket int, masterSocket int, starterConfig *starter.Config, jsonBy
 		status, err = engine.MonitorContainer(containerPid)
 		fatalChan <- err
 	}()
-
 	fatal = <-fatalChan
 
 	runtime.LockOSThread()
@@ -112,7 +107,6 @@ func SMaster(socket int, masterSocket int, starterConfig *starter.Config, jsonBy
 				syscall.Kill(ppid, syscall.SIGUSR2)
 			}
 		}
-		syscall.Kill(containerPid, syscall.SIGKILL)
 		sylog.Fatalf("%s", fatal)
 	}
 
@@ -138,9 +132,7 @@ func SMaster(socket int, masterSocket int, starterConfig *starter.Config, jsonBy
 
 func startup() {
 	loglevel := os.Getenv("SINGULARITY_MESSAGELEVEL")
-
 	os.Clearenv()
-
 	if loglevel != "" {
 		if os.Setenv("SINGULARITY_MESSAGELEVEL", loglevel) != nil {
 			sylog.Warningf("can't restore SINGULARITY_MESSAGELEVEL environment variable")
@@ -151,7 +143,7 @@ func startup() {
 	starterConfig := starter.NewConfig(starter.CConfig(cconf))
 	jsonBytes := C.GoBytes(unsafe.Pointer(C.json_stdin), C.int(starterConfig.GetJSONConfSize()))
 
-	/* free allocated buffer */
+	// free allocated buffer
 	C.free(unsafe.Pointer(C.json_stdin))
 	if unsafe.Pointer(C.nspath) != nil {
 		C.free(unsafe.Pointer(C.nspath))
@@ -170,8 +162,8 @@ func startup() {
 	case C.RPC_SERVER:
 		sylog.Verbosef("Serve RPC requests\n")
 		RPCServer(int(C.rpc_socket[1]), C.GoString(C.sruntime))
-
 		syscall.Close(int(C.rpc_socket[1]))
+		C.free(unsafe.Pointer(C.sruntime))
 
 		// that's the only way to ensure to be executed in a specific thread
 		// since prepare_scontainer_stage modify capabilities and IDs and we
