@@ -14,7 +14,7 @@ import (
 )
 
 // Name of the engine.
-const Name = "container"
+const Name = "kube_container"
 
 // EngineOperations implements the engines.EngineOperations interface for the pod management process.
 type EngineOperations struct {

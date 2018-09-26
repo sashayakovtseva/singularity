@@ -42,7 +42,7 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 
 	go func() {
 		comm := os.NewFile(uintptr(rpcSocket), "socket")
-		conn, err := net.FileConn(comm)
+		rpcConn, err := net.FileConn(comm)
 		if err != nil {
 			fatalChan <- fmt.Errorf("failed to copy unix socket descriptor: %s", err)
 			return
@@ -50,10 +50,10 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 		comm.Close()
 
 		runtime.LockOSThread()
-		if err := engine.CreateContainer(containerPid, conn); err != nil {
+		if err := engine.CreateContainer(containerPid, rpcConn); err != nil {
 			fatalChan <- fmt.Errorf("container creation failed: %s", err)
 		} else {
-			conn.Close()
+			rpcConn.Close()
 		}
 		runtime.Goexit()
 	}()

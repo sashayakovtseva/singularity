@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
-	"github.com/sylabs/singularity/src/pkg/util/mainthread"
 	"github.com/sylabs/singularity/src/pkg/util/user"
 )
 
@@ -16,13 +14,7 @@ import (
 // Since pod is run as instance PostStartProcess creates instance file on host fs.
 func (e *EngineOperations) PostStartProcess(pid int) error {
 	sylog.Debugf("pod %q is running", e.podName)
-
-	uid := os.Getuid()
-	gid := os.Getgid()
-	// todo set to false when in UserNamespace? use privileged?
-	privileged := true
-
-	file, err := instance.Add(e.podName, privileged)
+	file, err := instance.Add(e.podName, true)
 	if err != nil {
 		return fmt.Errorf("could not create instance file: %v", err)
 	}
@@ -32,6 +24,7 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 	}
 	sylog.Debugf("instance file is %s", file.Path)
 
+	uid := os.Getuid()
 	pw, err := user.GetPwUID(uint32(uid))
 	if err != nil {
 		return fmt.Errorf("could not get pwuid: %v", err)
@@ -41,31 +34,6 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 	file.User = pw.Name
 	file.Pid = pid
 	file.PPid = os.Getpid()
-	if privileged {
-		var err error
-		mainthread.Execute(func() {
-			if err = syscall.Setresuid(0, 0, uid); err != nil {
-				err = fmt.Errorf("failed to escalate uid privileges")
-				return
-			}
-			if err = syscall.Setresgid(0, 0, gid); err != nil {
-				err = fmt.Errorf("failed to escalate gid privileges")
-				return
-			}
-			if err = file.Update(); err != nil {
-				return
-			}
-			if err = syscall.Setresgid(gid, gid, 0); err != nil {
-				err = fmt.Errorf("failed to escalate gid privileges")
-				return
-			}
-			if err := syscall.Setresuid(uid, uid, 0); err != nil {
-				err = fmt.Errorf("failed to escalate uid privileges")
-				return
-			}
-		})
-		return err
-	}
 	return file.Update()
 }
 
@@ -74,29 +42,14 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 // only removes instance file from host fs.
 func (e *EngineOperations) CleanupContainer() error {
 	sylog.Debugf("removing instance file for pod %q", e.podName)
-	uid := os.Getuid()
 	pid := os.Getpid()
 	file, err := instance.Get(e.podName)
 	if err != nil {
 		return fmt.Errorf("could not get instance %q: %v", e.podName, err)
 	}
-
 	if file.PPid != pid {
 		sylog.Debugf("cleanup container is called from fake parent! expected %d, but got %d", file.PPid, pid)
 		return nil
-	}
-
-	if file.Privileged {
-		var err error
-		mainthread.Execute(func() {
-			if err = syscall.Setresuid(0, 0, uid); err != nil {
-				err = fmt.Errorf("failed to escalate privileges: %v", err)
-				return
-			}
-			defer syscall.Setresuid(uid, uid, 0)
-			err = file.Delete()
-		})
-		return err
 	}
 	return file.Delete()
 }

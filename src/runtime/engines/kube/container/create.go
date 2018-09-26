@@ -17,7 +17,7 @@ import (
 
 // CreateContainer creates a container. This method is called in the same
 // namespaces as target container and used for proper namespaces initialization.
-func (e *EngineOperations) CreateContainer(pid int, rpcConn net.Conn) error {
+func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) error {
 	sylog.Debugf("setting up container %q", e.containerName)
 	rpcOps := &client.RPC{
 		Client: rpc.NewClient(rpcConn),
@@ -107,6 +107,22 @@ func (e *EngineOperations) CreateContainer(pid int, rpcConn net.Conn) error {
 	_, err = rpcOps.Chroot(rootfs)
 	if err != nil {
 		return fmt.Errorf("could not chroot: %v", err)
+	}
+
+	err = e.addInstanceFile(containerPID)
+	if err != nil {
+		return fmt.Errorf("could not add instance file: %v", err)
+	}
+
+	err = rpcConn.Close()
+	if err != nil {
+		return fmt.Errorf("could not close rpc: %v", err)
+	}
+
+	sylog.Debugf("stopping container %q", e.containerName)
+	err = syscall.Kill(containerPID, syscall.SIGSTOP)
+	if err != nil {
+		return fmt.Errorf("could not send stop signal to container: %v", err)
 	}
 	return nil
 }

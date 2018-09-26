@@ -7,14 +7,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
 )
 
 // StartProcess starts container.
 func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
-	sylog.Debugf("starting container %q", e.containerName)
 	masterConn.Close()
+	pid := os.Getpid()
+	sylog.Debugf("starting container %q", e.containerName)
 
 	hostname, err := os.Hostname()
 	sylog.Debugf("hostname: %s %v", hostname, err)
@@ -23,7 +25,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	sylog.Debugf("pwd: %s %v", wd, err)
 
 	sylog.Debugf("uid=%d gid=%d euid=%d egid=%d", os.Getuid(), os.Getgid(), os.Geteuid(), os.Getegid())
-	sylog.Debugf("pid=%d ppid=%d", os.Getpid(), os.Getppid())
+	sylog.Debugf("pid=%d ppid=%d", pid, os.Getppid())
 
 	sylog.Debugf("envs=%s", os.Environ())
 
@@ -38,23 +40,28 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals)
 	for {
-		s := <-signals
-		sylog.Debugf("Received signal %s", s.String())
-		switch s {
-		case syscall.SIGCHLD:
-			var status syscall.WaitStatus
-			for {
-				wpid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
-				if wpid <= 0 || err != nil {
-					break
+		select {
+		case s := <-signals:
+			sylog.Debugf("Received signal %s", s.String())
+			switch s {
+			case syscall.SIGCHLD:
+				var status syscall.WaitStatus
+				for {
+					wpid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
+					if wpid <= 0 || err != nil {
+						break
+					}
+				}
+			case syscall.SIGCONT:
+			default:
+				err := syscall.Kill(0, s.(syscall.Signal))
+				if err != nil {
+					return fmt.Errorf("could not kill self: %v", err)
 				}
 			}
-		case syscall.SIGCONT:
 		default:
-			err := syscall.Kill(0, s.(syscall.Signal))
-			if err != nil {
-				return fmt.Errorf("could not kill self: %v", err)
-			}
+			sylog.Debugf("this is container %q running", e.containerName)
+			time.Sleep(time.Second * 5)
 		}
 	}
 }
