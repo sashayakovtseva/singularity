@@ -37,7 +37,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	signal.Notify(signals)
 	for {
 		s := <-signals
-		sylog.Debugf("Received signal %s", s.String())
+		sylog.Debugf("received signal: %v", s)
 		switch s {
 		case syscall.SIGCHLD:
 			var status syscall.WaitStatus
@@ -48,38 +48,14 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 				}
 			}
 		case syscall.SIGCONT:
+		case syscall.SIGTERM:
+			sylog.Debugf("pod %q was asked to terminate", e.podName)
+			os.Exit(0)
 		default:
 			err := syscall.Kill(0, s.(syscall.Signal))
 			if err != nil {
 				return fmt.Errorf("could not kill self: %v", err)
 			}
-		}
-	}
-}
-
-// MonitorContainer is responsible for waiting for pod process.
-func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error) {
-	sylog.Debugf("monitoring pod %q", e.podName)
-	defer func() {
-		sylog.Debugf("pod %q has exited", e.podName)
-	}()
-
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals)
-
-	for {
-		s := <-signals
-		switch s {
-		case syscall.SIGCHLD:
-			var status syscall.WaitStatus
-			if wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil); err != nil {
-				return status, fmt.Errorf("error while waiting child: %s", err)
-			} else if wpid != pid {
-				continue
-			}
-			return status, nil
-		default:
-			return 0, fmt.Errorf("interrupted by signal %s", s.String())
 		}
 	}
 }

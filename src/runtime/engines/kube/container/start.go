@@ -33,8 +33,6 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	sylog.Debugf("%s\n%v", resolv, err)
 
 	ll("/")
-	ll("/dev")
-	ll("/tmp")
 	ll("/proc")
 
 	signals := make(chan os.Signal, 1)
@@ -42,17 +40,12 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	for {
 		select {
 		case s := <-signals:
-			sylog.Debugf("Received signal %s", s.String())
+			sylog.Debugf("received signal: %v", s)
 			switch s {
-			case syscall.SIGCHLD:
-				var status syscall.WaitStatus
-				for {
-					wpid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
-					if wpid <= 0 || err != nil {
-						break
-					}
-				}
 			case syscall.SIGCONT:
+			case syscall.SIGTERM:
+				sylog.Debugf("container %q was asked to terminate", e.containerName)
+				os.Exit(0)
 			default:
 				err := syscall.Kill(0, s.(syscall.Signal))
 				if err != nil {
@@ -62,33 +55,6 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		default:
 			sylog.Debugf("this is container %q running", e.containerName)
 			time.Sleep(time.Second * 5)
-		}
-	}
-}
-
-// MonitorContainer is responsible for waiting for container process.
-func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error) {
-	sylog.Debugf("monitoring container %q", e.containerName)
-	defer func() {
-		sylog.Debugf("container %q has exited", e.containerName)
-	}()
-
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals)
-
-	for {
-		s := <-signals
-		switch s {
-		case syscall.SIGCHLD:
-			var status syscall.WaitStatus
-			if wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil); err != nil {
-				return status, fmt.Errorf("error while waiting child: %s", err)
-			} else if wpid != pid {
-				continue
-			}
-			return status, nil
-		default:
-			return 0, fmt.Errorf("interrupted by signal %s", s.String())
 		}
 	}
 }

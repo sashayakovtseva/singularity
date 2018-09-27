@@ -12,6 +12,7 @@ import (
 	"github.com/sylabs/sif/pkg/sif"
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/pkg/util/loop"
+	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
 )
 
@@ -109,20 +110,20 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not chroot: %v", err)
 	}
 
-	err = e.addInstanceFile(containerPID)
+	err = kube.AddInstanceFile(e.containerName, e.containerConfig.Image.Image, containerPID, e.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
-	}
-
-	err = rpcConn.Close()
-	if err != nil {
-		return fmt.Errorf("could not close rpc: %v", err)
 	}
 
 	sylog.Debugf("stopping container %q", e.containerName)
 	err = syscall.Kill(containerPID, syscall.SIGSTOP)
 	if err != nil {
 		return fmt.Errorf("could not send stop signal to container: %v", err)
+	}
+
+	err = rpcConn.Close()
+	if err != nil {
+		return fmt.Errorf("could not close rpc: %v", err)
 	}
 	return nil
 }

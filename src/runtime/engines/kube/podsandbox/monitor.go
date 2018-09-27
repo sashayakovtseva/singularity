@@ -1,40 +1,51 @@
 package podsandbox
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
-	"github.com/sylabs/singularity/src/pkg/util/user"
+	"github.com/sylabs/singularity/src/runtime/engines/kube"
 )
 
 // PostStartProcess is called in smaster after successful execution of container process.
 // Since pod is run as instance PostStartProcess creates instance file on host fs.
 func (e *EngineOperations) PostStartProcess(pid int) error {
 	sylog.Debugf("pod %q is running", e.podName)
-	file, err := instance.Add(e.podName, true)
+	err := kube.AddInstanceFile(e.podName, "", pid, e.CommonConfig)
 	if err != nil {
-		return fmt.Errorf("could not create instance file: %v", err)
+		return fmt.Errorf("could not add instance file: %v", err)
 	}
-	file.Config, err = json.Marshal(e.CommonConfig)
-	if err != nil {
-		return fmt.Errorf("could not marshal engine config: %v", err)
-	}
-	sylog.Debugf("instance file is %s", file.Path)
+	return nil
+}
 
-	uid := os.Getuid()
-	pw, err := user.GetPwUID(uint32(uid))
-	if err != nil {
-		return fmt.Errorf("could not get pwuid: %v", err)
-	}
-	sylog.Debugf("pwuid: %+v", pw)
+// MonitorContainer is responsible for waiting for pod process.
+func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error) {
+	sylog.Debugf("monitoring pod %q", e.podName)
+	defer func() {
+		sylog.Debugf("pod %q has exited", e.podName)
+	}()
 
-	file.User = pw.Name
-	file.Pid = pid
-	file.PPid = os.Getpid()
-	return file.Update()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals)
+	for {
+		s := <-signals
+		sylog.Debugf("received signal: %v", s)
+		switch s {
+		case syscall.SIGCHLD:
+			var status syscall.WaitStatus
+			if wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil); err != nil {
+				return status, fmt.Errorf("error while waiting child: %s", err)
+			} else if wpid != pid {
+				continue
+			}
+			return status, nil
+		default:
+			return 0, fmt.Errorf("interrupted by signal %s", s.String())
+		}
+	}
 }
 
 // CleanupContainer is called in smaster after the MontiorContainer returns.
@@ -43,7 +54,10 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 func (e *EngineOperations) CleanupContainer() error {
 	sylog.Debugf("removing instance file for pod %q", e.podName)
 	pid := os.Getpid()
-	file, err := instance.Get(e.podName)
+	file, err := kube.GetInstance(e.podName)
+	if err == kube.ErrNotFound {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("could not get instance %q: %v", e.podName, err)
 	}
@@ -51,5 +65,8 @@ func (e *EngineOperations) CleanupContainer() error {
 		sylog.Debugf("cleanup container is called from fake parent! expected %d, but got %d", file.PPid, pid)
 		return nil
 	}
-	return file.Delete()
+	if err := file.Delete(); err != nil {
+		return fmt.Errorf("could not remove instance file: %v", err)
+	}
+	return nil
 }

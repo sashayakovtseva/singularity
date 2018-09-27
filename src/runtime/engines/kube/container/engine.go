@@ -65,6 +65,10 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	createNs = append(createNs, specs.LinuxNamespace{
 		Type: specs.MountNamespace,
 	})
+	sylog.Debugf("requesting PID namespace")
+	createNs = append(joinNs, specs.LinuxNamespace{
+		Type: specs.PIDNamespace,
+	})
 
 	if e.podConfig.Hostname != "" {
 		sylog.Debugf("joining pod's UTS namespace")
@@ -78,18 +82,18 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		conf.SetNoNewPrivs(e.security.NoNewPrivs)
 		opts := e.security.NamespaceOptions
 		if opts != nil {
-			if opts.Pid == v1alpha2.NamespaceMode_CONTAINER {
-				sylog.Debugf("requesting PID namespace")
-				createNs = append(joinNs, specs.LinuxNamespace{
-					Type: specs.PIDNamespace,
-				})
-			} else if opts.Pid == v1alpha2.NamespaceMode_POD {
-				sylog.Debugf("joining pod's PID namespace")
-				joinNs = append(joinNs, specs.LinuxNamespace{
-					Type: specs.PIDNamespace,
-					Path: filepath.Join(podNsPath, "pid"),
-				})
-			}
+			//if opts.Pid == v1alpha2.NamespaceMode_CONTAINER {
+			//	sylog.Debugf("requesting PID namespace")
+			//	createNs = append(joinNs, specs.LinuxNamespace{
+			//		Type: specs.PIDNamespace,
+			//	})
+			//} else if opts.Pid == v1alpha2.NamespaceMode_POD {
+			//	sylog.Debugf("joining pod's PID namespace")
+			//	joinNs = append(joinNs, specs.LinuxNamespace{
+			//		Type: specs.PIDNamespace,
+			//		Path: filepath.Join(podNsPath, "pid"),
+			//	})
+			//}
 
 			if opts.Ipc == v1alpha2.NamespaceMode_CONTAINER {
 				sylog.Debugf("requesting IPC namespace")

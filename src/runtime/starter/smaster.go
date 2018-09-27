@@ -43,17 +43,18 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 	go func() {
 		comm := os.NewFile(uintptr(rpcSocket), "socket")
 		rpcConn, err := net.FileConn(comm)
+		comm.Close()
 		if err != nil {
 			fatalChan <- fmt.Errorf("failed to copy unix socket descriptor: %s", err)
 			return
 		}
-		comm.Close()
+		defer rpcConn.Close()
 
 		runtime.LockOSThread()
-		if err := engine.CreateContainer(containerPid, rpcConn); err != nil {
+		err = engine.CreateContainer(containerPid, rpcConn)
+		if err != nil {
 			fatalChan <- fmt.Errorf("container creation failed: %s", err)
-		} else {
-			rpcConn.Close()
+			return
 		}
 		runtime.Goexit()
 	}()
@@ -63,30 +64,34 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 		comm := os.NewFile(uintptr(masterSocket), "master-socket")
 		conn, err := net.FileConn(comm)
 		comm.Close()
+		if err != nil {
+			fatalChan <- fmt.Errorf("failed to create master connection: %s", err)
+		}
+		defer conn.Close()
 
 		_, err = conn.Read(data)
-		if err == io.EOF || err == nil {
-			if err := engine.PostStartProcess(containerPid); err != nil {
-				if starterConfig.GetInstance() && os.Getppid() == ppid {
-					syscall.Kill(ppid, syscall.SIGUSR2)
-				}
-				fatalChan <- fmt.Errorf("post start process failed: %s", err)
-			} else {
-				if starterConfig.GetInstance() {
-					// sleep a bit to see if child exit
-					time.Sleep(100 * time.Millisecond)
-					if os.Getppid() == ppid {
-						syscall.Kill(ppid, syscall.SIGUSR1)
-					}
-				}
-			}
-		} else {
+		if err != nil && err != io.EOF {
 			if starterConfig.GetInstance() && os.Getppid() == ppid {
 				syscall.Kill(ppid, syscall.SIGUSR2)
 			}
 			fatalChan <- fmt.Errorf("failed to start process: %s", err)
+			return
 		}
-		conn.Close()
+		err = engine.PostStartProcess(containerPid)
+		if err != nil {
+			if starterConfig.GetInstance() && os.Getppid() == ppid {
+				syscall.Kill(ppid, syscall.SIGUSR2)
+			}
+			fatalChan <- fmt.Errorf("post start process failed: %s", err)
+			return
+		}
+		if starterConfig.GetInstance() {
+			// sleep a bit to see if child exit
+			time.Sleep(100 * time.Millisecond)
+			if os.Getppid() == ppid {
+				syscall.Kill(ppid, syscall.SIGUSR1)
+			}
+		}
 	}()
 
 	go func() {

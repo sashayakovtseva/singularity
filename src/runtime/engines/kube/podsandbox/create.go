@@ -39,7 +39,7 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 	if e.security != nil && e.security.NamespaceOptions != nil &&
 		e.security.NamespaceOptions.Pid == v1alpha2.NamespaceMode_POD {
 		sylog.Debugf("mounting proc fs")
-		_, err := rpcOps.Mount("/proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV, "")
+		_, err := rpcOps.Mount("proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV, "")
 		if err != nil {
 			return fmt.Errorf("could not mount proc fs: %s", err)
 		}
@@ -63,7 +63,7 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		}
 		defer os.Remove(temp.Name())
 		ioutil.WriteFile(temp.Name(), b.Bytes(), 0644)
-		sylog.Debugf("mounting resolf.conf file")
+		sylog.Debugf("mounting resolv.conf file")
 		_, err = rpcOps.Mount(temp.Name(), "/etc/resolv.conf", "", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_BIND, "")
 		if err != nil {
 			return fmt.Errorf("could not mount resolv.conf: %s", err)
