@@ -18,6 +18,8 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	pid := os.Getpid()
 	sylog.Debugf("starting container %q", e.containerName)
 
+	ll("/proc/self/ns")
+
 	hostname, err := os.Hostname()
 	sylog.Debugf("hostname: %s %v", hostname, err)
 

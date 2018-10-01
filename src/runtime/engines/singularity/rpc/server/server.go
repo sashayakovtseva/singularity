@@ -7,16 +7,14 @@ package server
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 
-	"github.com/sylabs/singularity/src/pkg/util/mainthread"
-
-	"io/ioutil"
-
+	"github.com/sylabs/singularity/src/pkg/buildcfg"
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/pkg/util/loop"
 	"github.com/sylabs/singularity/src/pkg/util/mainthread"

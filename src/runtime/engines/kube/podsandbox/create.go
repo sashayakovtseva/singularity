@@ -36,8 +36,7 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		}
 	}
 
-	if e.security != nil && e.security.NamespaceOptions != nil &&
-		e.security.NamespaceOptions.Pid == v1alpha2.NamespaceMode_POD {
+	if e.security.GetNamespaceOptions().GetPid() == v1alpha2.NamespaceMode_POD {
 		sylog.Debugf("mounting proc fs")
 		_, err := rpcOps.Mount("proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV, "")
 		if err != nil {
@@ -45,7 +44,7 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		}
 	}
 
-	dns := e.podConfig.DnsConfig
+	dns := e.podConfig.GetDnsConfig()
 	if dns != nil {
 		b := bytes.NewBuffer(nil)
 		for _, s := range dns.Servers {

@@ -9,6 +9,8 @@ import (
 
 	"os"
 
+	"path/filepath"
+
 	"github.com/sylabs/sif/pkg/sif"
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/pkg/util/loop"
@@ -25,8 +27,9 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		Name:   e.CommonConfig.EngineName,
 	}
 
+	ll("/proc/self/ns")
 	rootfs := "/mnt/" + e.containerName
-	imagePath := e.containerConfig.Image.Image
+	imagePath := e.containerConfig.GetImage().GetImage()
 	{
 		sylog.Debugf("mounting tmpfs into /mnt")
 		_, err := rpcOps.Mount("tmpfs", "/mnt", "tmpfs", syscall.MS_NOSUID, "")
@@ -110,7 +113,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not chroot: %v", err)
 	}
 
-	err = kube.AddInstanceFile(e.containerName, e.containerConfig.Image.Image, containerPID, e.CommonConfig)
+	err = kube.AddInstanceFile(e.containerName, e.containerConfig.GetImage().GetImage(), containerPID, e.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
 	}
@@ -132,6 +135,7 @@ func ll(dir string) {
 	fii, _ := ioutil.ReadDir(dir)
 	sylog.Debugf("content of %s", dir)
 	for _, fi := range fii {
-		sylog.Debugf("\t%s\t%s", fi.Mode().String(), fi.Name())
+		link, err := os.Readlink(filepath.Join(dir, fi.Name()))
+		sylog.Debugf("\t%s\t%s -> %s %v", fi.Mode().String(), fi.Name(), link, err)
 	}
 }

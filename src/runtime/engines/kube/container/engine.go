@@ -32,12 +32,10 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	e.CommonConfig = cfg
 	e.createContainerRequest = cfg.EngineConfig.(*v1alpha2.CreateContainerRequest)
 	e.containerConfig = e.createContainerRequest.Config
-	meta := e.containerConfig.Metadata // assume metadata is always non-nil
+	meta := e.containerConfig.GetMetadata()
 	e.containerName = fmt.Sprintf("%s_%s_%d", e.createContainerRequest.PodSandboxId, meta.Name, meta.Attempt)
-	e.podConfig = e.createContainerRequest.SandboxConfig
-	if e.containerConfig.Linux != nil {
-		e.security = e.containerConfig.Linux.SecurityContext
-	}
+	e.podConfig = e.createContainerRequest.GetSandboxConfig()
+	e.security = e.containerConfig.GetLinux().GetSecurityContext()
 }
 
 // Config returns empty CreateContainerRequest that will be filled later with received JSON data.
@@ -60,7 +58,6 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 
 	var joinNs []specs.LinuxNamespace
 	var createNs []specs.LinuxNamespace
-
 	sylog.Debugf("requesting Mount namespace")
 	createNs = append(createNs, specs.LinuxNamespace{
 		Type: specs.MountNamespace,
@@ -80,7 +77,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 
 	if e.security != nil {
 		conf.SetNoNewPrivs(e.security.NoNewPrivs)
-		opts := e.security.NamespaceOptions
+		opts := e.security.GetNamespaceOptions()
 		if opts != nil {
 			//if opts.Pid == v1alpha2.NamespaceMode_CONTAINER {
 			//	sylog.Debugf("requesting PID namespace")
@@ -95,12 +92,13 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 			//	})
 			//}
 
-			if opts.Ipc == v1alpha2.NamespaceMode_CONTAINER {
+			switch opts.GetIpc() {
+			case v1alpha2.NamespaceMode_CONTAINER:
 				sylog.Debugf("requesting IPC namespace")
 				createNs = append(joinNs, specs.LinuxNamespace{
 					Type: specs.IPCNamespace,
 				})
-			} else if opts.Ipc == v1alpha2.NamespaceMode_POD {
+			case v1alpha2.NamespaceMode_POD:
 				sylog.Debugf("joining pod's IPC namespace")
 				joinNs = append(joinNs, specs.LinuxNamespace{
 					Type: specs.IPCNamespace,
@@ -108,12 +106,13 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 				})
 			}
 
-			if opts.Network == v1alpha2.NamespaceMode_CONTAINER {
+			switch opts.GetNetwork() {
+			case v1alpha2.NamespaceMode_CONTAINER:
 				sylog.Debugf("requesting NET namespace")
 				createNs = append(joinNs, specs.LinuxNamespace{
 					Type: specs.NetworkNamespace,
 				})
-			} else if opts.Network == v1alpha2.NamespaceMode_POD {
+			case v1alpha2.NamespaceMode_POD:
 				sylog.Debugf("joining pod's NET namespace")
 				joinNs = append(joinNs, specs.LinuxNamespace{
 					Type: specs.NetworkNamespace,

@@ -8,6 +8,7 @@ package podsandbox
 import (
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sylabs/singularity/src/pkg/sylog"
@@ -33,11 +34,10 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	sylog.Debugf("%+v", cfg)
 	e.CommonConfig = cfg
 	e.podConfig = cfg.EngineConfig.(*v1alpha2.PodSandboxConfig)
-	meta := e.podConfig.Metadata // assume metadata is always non-nil
+	meta := e.podConfig.GetMetadata()
 	e.podName = fmt.Sprintf("%s_%s_%s_%d", meta.Name, meta.Namespace, meta.Uid, meta.Attempt)
-	if e.podConfig.Linux != nil {
-		e.security = e.podConfig.Linux.SecurityContext
-	}
+	e.security = e.podConfig.GetLinux().GetSecurityContext()
+
 }
 
 // Config returns empty PodSandboxConfig that will be filled later with received JSON data.
@@ -66,20 +66,20 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 
 	if e.security != nil {
 		conf.SetNoNewPrivs(!e.security.Privileged)
-		if e.security.NamespaceOptions != nil {
-			if e.security.NamespaceOptions.Network == v1alpha2.NamespaceMode_POD {
+		if e.security.GetNamespaceOptions() != nil {
+			if e.security.GetNamespaceOptions().GetNetwork() == v1alpha2.NamespaceMode_POD {
 				sylog.Debugf("requesting NET namespace")
 				namespaces = append(namespaces, specs.LinuxNamespace{
 					Type: specs.NetworkNamespace,
 				})
 			}
-			if e.security.NamespaceOptions.Pid == v1alpha2.NamespaceMode_POD {
+			if e.security.GetNamespaceOptions().GetPid() == v1alpha2.NamespaceMode_POD {
 				sylog.Debugf("requesting PID namespace")
 				namespaces = append(namespaces, specs.LinuxNamespace{
 					Type: specs.PIDNamespace,
 				})
 			}
-			if e.security.NamespaceOptions.Ipc == v1alpha2.NamespaceMode_POD {
+			if e.security.GetNamespaceOptions().GetIpc() == v1alpha2.NamespaceMode_POD {
 				sylog.Debugf("requesting IPC namespace")
 				namespaces = append(namespaces, specs.LinuxNamespace{
 					Type: specs.IPCNamespace,
@@ -87,8 +87,14 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 			}
 		}
 	}
-	// todo RunAsUser
-	// todo request UserNamespace?
 	conf.SetNsFlagsFromSpec(namespaces)
+
+	if e.podConfig.LogDirectory != "" {
+		err := os.Mkdir(e.podConfig.LogDirectory, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("could not create log directory for pod %q", e.podName)
+		}
+	}
+
 	return nil
 }
