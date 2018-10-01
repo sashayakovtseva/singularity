@@ -7,14 +7,17 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/opencontainers/runtime-tools/generate"
+	"github.com/sylabs/singularity/src/pkg/libexec"
 	"github.com/sylabs/singularity/src/pkg/util/nvidiautils"
 
 	"github.com/spf13/cobra"
@@ -22,6 +25,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/build"
 	"github.com/sylabs/singularity/src/pkg/buildcfg"
 	"github.com/sylabs/singularity/src/pkg/client/cache"
+	library "github.com/sylabs/singularity/src/pkg/client/library"
 	ociclient "github.com/sylabs/singularity/src/pkg/client/oci"
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/security"
@@ -78,6 +82,9 @@ func init() {
 		cmd.Flags().AddFlag(actionFlags.Lookup("security"))
 		cmd.Flags().AddFlag(actionFlags.Lookup("apply-cgroups"))
 		cmd.Flags().AddFlag(actionFlags.Lookup("app"))
+		if cmd == ShellCmd {
+			cmd.Flags().AddFlag(actionFlags.Lookup("shell"))
+		}
 		cmd.Flags().SetInterspersed(false)
 	}
 
@@ -87,37 +94,90 @@ func init() {
 	SingularityCmd.AddCommand(TestCmd)
 }
 
-func replaceURIWithImage(cmd *cobra.Command, args []string) {
-	// If args[0] is not transport:ref (ex. intance://...) formatted return, not a URI
-	if t, _ := uri.SplitURI(args[0]); t == "instance" || t == "" {
-		return
-	}
-
-	sum, err := ociclient.ImageSHA(args[0])
+func handleOCI(u string) (string, error) {
+	sum, err := ociclient.ImageSHA(u)
 	if err != nil {
-		sylog.Fatalf("Failed to get SHA of %v: %v", args[0], err)
+		return "", fmt.Errorf("failed to get SHA of %v: %v", u, err)
 	}
 
-	name := uri.NameFromURI(args[0])
+	name := uri.NameFromURI(u)
 	imgabs := cache.OciTempImage(sum, name)
 
 	if exists, err := cache.OciTempExists(sum, name); err != nil {
-		sylog.Fatalf("Unable to check if %v exists: %v", imgabs, err)
+		return "", fmt.Errorf("unable to check if %v exists: %v", imgabs, err)
 	} else if !exists {
 		sylog.Infof("Converting OCI blobs to SIF format")
-		b, err := build.NewBuild(args[0], imgabs, "sif", false, false, nil, true, "", "")
+		b, err := build.NewBuild(u, imgabs, "sif", false, false, nil, true, "", "")
 		if err != nil {
-			sylog.Fatalf("Unable to create new build: %v", err)
+			return "", fmt.Errorf("unable to create new build: %v", err)
 		}
 
 		if err := b.Full(); err != nil {
-			sylog.Fatalf("Unable to build: %v", err)
+			return "", fmt.Errorf("unable to build: %v", err)
 		}
 
 		sylog.Infof("Image cached as SIF at %s", imgabs)
 	}
 
-	args[0] = imgabs
+	return imgabs, nil
+}
+
+func handleLibrary(u string) (string, error) {
+	libraryImage, err := library.GetImage("https://library.sylabs.io", authToken, u)
+	if err != nil {
+		return "", err
+	}
+
+	imageName := uri.NameFromURI(u)
+	imagePath := cache.LibraryImage(libraryImage.Hash, imageName)
+
+	if exists, err := cache.LibraryImageExists(libraryImage.Hash, imageName); err != nil {
+		return "", fmt.Errorf("unable to check if %v exists: %v", imagePath, err)
+	} else if !exists {
+		sylog.Infof("Downloading library image")
+		libexec.PullLibraryImage(imagePath, u, "https://library.sylabs.io", false, authToken)
+	}
+
+	return imagePath, nil
+}
+
+func handleShub(u string) (string, error) {
+	imageName := uri.NameFromURI(u)
+	imagePath := cache.ShubImage("hash", imageName)
+
+	libexec.PullShubImage(imagePath, u, true)
+
+	return imagePath, nil
+}
+
+func replaceURIWithImage(cmd *cobra.Command, args []string) {
+	// If args[0] is not transport:ref (ex. intance://...) formatted return, not a URI
+	t, _ := uri.SplitURI(args[0])
+	if t == "instance" || t == "" {
+		return
+	}
+
+	var image string
+	var err error
+
+	switch t {
+	case uri.Library:
+		sylabsToken(cmd, args) // Fetch Auth Token for library access
+
+		image, err = handleLibrary(args[0])
+	case uri.Shub:
+		image, err = handleShub(args[0])
+	case ociclient.IsSupported(t):
+		image, err = handleOCI(args[0])
+	default:
+		sylog.Fatalf("Unsupported transport type: %s", t)
+	}
+
+	if err != nil {
+		sylog.Fatalf("Unable to handle %s uri: %v", args[0], err)
+	}
+
+	args[0] = image
 	return
 }
 
@@ -239,8 +299,6 @@ func execStarter(cobraCmd *cobra.Command, image string, args []string, name stri
 		sylog.Warningf("gid security feature requires root privileges")
 	}
 
-	// temporary check for development
-	// TODO: a real URI handler
 	if strings.HasPrefix(image, "instance://") {
 		instanceName := instance.ExtractName(image)
 		file, err := instance.Get(instanceName)
@@ -292,6 +350,11 @@ func execStarter(cobraCmd *cobra.Command, image string, args []string, name stri
 	engineConfig.SetKeepPrivs(KeepPrivs)
 	engineConfig.SetNoPrivs(NoPrivs)
 	engineConfig.SetSecurity(Security)
+	engineConfig.SetShell(ShellPath)
+
+	if ShellPath != "" {
+		generator.AddProcessEnv("SINGULARITY_SHELL", ShellPath)
+	}
 
 	if os.Getuid() != 0 && CgroupsPath != "" {
 		sylog.Warningf("--apply-cgroups requires root privileges")
@@ -354,9 +417,6 @@ func execStarter(cobraCmd *cobra.Command, image string, args []string, name stri
 		_, err := instance.Get(name)
 		if err == nil {
 			sylog.Fatalf("instance %s already exists", name)
-		}
-		if err := instance.SetLogFile(name); err != nil {
-			sylog.Fatalf("failed to create instance log files: %s", err)
 		}
 
 		if IsBoot {
@@ -466,7 +526,49 @@ func execStarter(cobraCmd *cobra.Command, image string, args []string, name stri
 		}
 	}
 
-	if err := exec.Pipe(starter, []string{procname}, Env, configData); err != nil {
-		sylog.Fatalf("%s", err)
+	if engineConfig.GetInstance() {
+		stdout, stderr, err := instance.SetLogFile(name)
+		if err != nil {
+			sylog.Fatalf("failed to create instance log files: %s", err)
+		}
+
+		start, err := stderr.Seek(0, os.SEEK_END)
+		if err != nil {
+			sylog.Warningf("failed to get standard error stream offset: %s", err)
+		}
+
+		cmd, err := exec.PipeCommand(starter, []string{procname}, Env, configData)
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+
+		cmdErr := cmd.Run()
+
+		if sylog.GetLevel() != 0 {
+			// starter can exit a bit before all errors has been reported
+			// by instance process, wait a bit to catch all errors
+			time.Sleep(50 * time.Millisecond)
+
+			end, err := stderr.Seek(0, os.SEEK_END)
+			if err != nil {
+				sylog.Warningf("failed to get standard error stream offset: %s", err)
+			}
+			if end-start > 0 {
+				output := make([]byte, end-start)
+				stderr.ReadAt(output, start)
+				fmt.Println(string(output))
+			}
+		}
+
+		if cmdErr != nil {
+			sylog.Fatalf("failed to start instance: %s", cmdErr)
+		} else {
+			sylog.Infof("you will find instance output here: %s", stdout.Name())
+			sylog.Infof("you will find instance error here: %s", stderr.Name())
+			sylog.Infof("instance started successfully")
+		}
+	} else {
+		if err := exec.Pipe(starter, []string{procname}, Env, configData); err != nil {
+			sylog.Fatalf("%s", err)
+		}
 	}
 }
