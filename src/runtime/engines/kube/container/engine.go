@@ -3,6 +3,7 @@ package container
 import (
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -31,7 +32,7 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	sylog.Debugf("%+v", cfg)
 	e.CommonConfig = cfg
 	e.createContainerRequest = cfg.EngineConfig.(*v1alpha2.CreateContainerRequest)
-	e.containerConfig = e.createContainerRequest.Config
+	e.containerConfig = e.createContainerRequest.GetConfig()
 	meta := e.containerConfig.GetMetadata()
 	e.containerName = fmt.Sprintf("%s_%s_%d", e.createContainerRequest.PodSandboxId, meta.Name, meta.Attempt)
 	e.podConfig = e.createContainerRequest.GetSandboxConfig()
@@ -123,6 +124,20 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	}
 	conf.SetNsPathFromSpec(joinNs)
 	conf.SetNsFlagsFromSpec(createNs)
+
+	if e.containerConfig.LogPath != "" {
+		logPath := filepath.Join(e.podConfig.LogDirectory, e.containerConfig.LogPath)
+		err := os.MkdirAll(filepath.Dir(logPath), os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("could not create log directory: %v", err)
+		}
+		sylog.Debugf("creating log file")
+		logs, err := os.Create(logPath)
+		if err != nil {
+			return fmt.Errorf("could not create log file: %v", err)
+		}
+		logs.Close()
+	}
 
 	// todo RunAsUser
 	// todo request UserNamespace?

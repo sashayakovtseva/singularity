@@ -103,16 +103,15 @@ func init() {
 	registeredEngineOperations = make(map[string]EngineOperations)
 	registeredEngineOperations[singularity.Name] = &singularity.EngineOperations{EngineConfig: singularity.NewConfig()}
 	registeredEngineOperations[imgbuild.Name] = &imgbuild.EngineOperations{EngineConfig: &imgbuild.EngineConfig{}}
+	registeredEngineOperations[podsandbox.Name] = &podsandbox.EngineOperations{}
+	registeredEngineOperations[container.Name] = &container.EngineOperations{}
 
 	// register singularity rpc methods
 	methods := new(server.Methods)
 	registeredEngineRPCMethods = make(map[string]interface{})
 	registeredEngineRPCMethods[singularity.Name] = methods
 	registeredEngineRPCMethods[imgbuild.Name] = methods
-
-	// todo think of how to refactor rpc methods
-	registeredEngineOperations[podsandbox.Name] = &podsandbox.EngineOperations{}
 	registeredEngineRPCMethods[podsandbox.Name] = methods
-	registeredEngineOperations[container.Name] = &container.EngineOperations{}
 	registeredEngineRPCMethods[container.Name] = methods
+
 }

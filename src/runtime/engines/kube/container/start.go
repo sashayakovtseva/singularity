@@ -2,42 +2,52 @@ package container
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
 )
 
 // StartProcess starts container.
 func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
-	masterConn.Close()
-	pid := os.Getpid()
+	if e.containerConfig.WorkingDir != "" {
+		sylog.Debugf("changing working directory to %q", e.containerConfig.WorkingDir)
+		err := os.Chdir(e.containerConfig.WorkingDir)
+		if err != nil {
+			return fmt.Errorf("could not set working directory: %v", err)
+		}
+	}
+
+	var envs []string
+	for _, kv := range e.containerConfig.GetEnvs() {
+		envs = append(envs, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
+	}
 	sylog.Debugf("starting container %q", e.containerName)
 
-	ll("/proc/self/ns")
+	command := append(e.containerConfig.GetCommand(), e.containerConfig.GetArgs()...)
+	// Spawn and wait container process, signal handler
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = envs
 
-	hostname, err := os.Hostname()
-	sylog.Debugf("hostname: %s %v", hostname, err)
-
-	wd, err := os.Getwd()
-	sylog.Debugf("pwd: %s %v", wd, err)
-
-	sylog.Debugf("uid=%d gid=%d euid=%d egid=%d", os.Getuid(), os.Getgid(), os.Geteuid(), os.Getegid())
-	sylog.Debugf("pid=%d ppid=%d", pid, os.Getppid())
-
-	sylog.Debugf("envs=%s", os.Environ())
-
-	resolv, err := ioutil.ReadFile("/etc/resolv.conf")
-	sylog.Debugf("%s\n%v", resolv, err)
-
-	ll("/")
-	ll("/proc")
-
+	errChan := make(chan error, 1)
 	signals := make(chan os.Signal, 1)
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("exec %v failed: %v", command, err)
+	}
+
+	go func() {
+		errChan <- cmd.Wait()
+	}()
+
+	masterConn.Close()
+
 	signal.Notify(signals)
 	for {
 		select {
@@ -45,18 +55,31 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 			sylog.Debugf("received signal: %v", s)
 			switch s {
 			case syscall.SIGCONT:
-			case syscall.SIGTERM:
-				sylog.Debugf("container %q was asked to terminate", e.containerName)
-				os.Exit(0)
+			case syscall.SIGCHLD:
+				var status syscall.WaitStatus
+				for {
+					wpid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
+					if wpid <= 0 || err != nil {
+						break
+					}
+				}
 			default:
-				err := syscall.Kill(0, s.(syscall.Signal))
+				err := syscall.Kill(-1, s.(syscall.Signal))
 				if err != nil {
 					return fmt.Errorf("could not kill self: %v", err)
 				}
 			}
-		default:
-			sylog.Debugf("this is container %q running", e.containerName)
-			time.Sleep(time.Second * 5)
+		case err := <-errChan:
+			if e, ok := err.(*exec.ExitError); ok {
+				if status, ok := e.Sys().(syscall.WaitStatus); ok {
+					if status.Signaled() {
+						syscall.Kill(syscall.Gettid(), syscall.SIGKILL)
+					}
+					os.Exit(status.ExitStatus())
+				}
+				return fmt.Errorf("command exit with error: %s", err)
+			}
+			os.Exit(0)
 		}
 	}
 }

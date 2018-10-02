@@ -90,7 +90,8 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	conf.SetNsFlagsFromSpec(namespaces)
 
 	if e.podConfig.LogDirectory != "" {
-		err := os.Mkdir(e.podConfig.LogDirectory, os.ModePerm)
+		sylog.Debugf("creating log directory")
+		err := os.MkdirAll(e.podConfig.LogDirectory, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create log directory for pod %q", e.podName)
 		}

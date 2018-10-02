@@ -33,7 +33,6 @@ func AddInstanceFile(name, image string, pid int, config interface{}) error {
 	if err != nil {
 		return fmt.Errorf("could not get pwuid: %v", err)
 	}
-	sylog.Debugf("pwuid: %+v", pw)
 
 	file.User = pw.Name
 	file.Pid = pid

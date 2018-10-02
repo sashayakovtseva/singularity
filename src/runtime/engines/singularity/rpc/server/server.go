@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -48,9 +49,6 @@ func (t *Methods) Mkdir(arguments *args.MkdirArgs, reply *int) (err error) {
 
 // Chroot performs a chroot with the specified arguments
 func (t *Methods) Chroot(arguments *args.ChrootArgs, reply *int) error {
-	mounts, _ := ioutil.ReadFile("/proc/self/mounts")
-	sylog.Debugf("mounts: %s", mounts)
-
 	// idea taken from libcontainer (and also LXC developpers) to avoid
 	// creation of temporary directory or use of existing directory
 	// for pivot_root
@@ -173,6 +171,35 @@ func (t *Methods) SetFsID(arguments *args.SetFsIDArgs, reply *int) error {
 		syscall.Setfsuid(arguments.UID)
 		syscall.Setfsgid(arguments.GID)
 	})
+	return nil
+}
+
+func (t *Methods) Ll(dir string, reply *struct{}) error {
+	fii, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	sylog.Debugf("content of %s", dir)
+	for _, fi := range fii {
+		link, _ := os.Readlink(filepath.Join(dir, fi.Name()))
+		sylog.Debugf("\t%s\t%s -> %s", fi.Mode().String(), fi.Name(), link)
+	}
+	return nil
+}
+
+func (t *Methods) RedirectIO(path string, reply *struct{}) error {
+	io, err := os.OpenFile(path, syscall.O_RDWR, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("could not open file: %v", err)
+	}
+	err = syscall.Dup3(int(io.Fd()), int(os.Stdout.Fd()), 0)
+	if err != nil {
+		return fmt.Errorf("could not redirect stdout: %v", err)
+	}
+	err = syscall.Dup3(int(io.Fd()), int(os.Stderr.Fd()), 0)
+	if err != nil {
+		return fmt.Errorf("could not redirect stderr: %v", err)
+	}
 	return nil
 }
 

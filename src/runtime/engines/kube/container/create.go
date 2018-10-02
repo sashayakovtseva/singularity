@@ -28,13 +28,19 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	}
 
 	ll("/proc/self/ns")
+	rpcOps.Ll("/")
+	rpcOps.Ll("/proc/self/ns")
+	rpcOps.Ll("/proc/self/fd")
+	rpcOps.Ll("/tmp")
+	rpcOps.Ll("/tmp/log/pods/testpoduid/testcontainer")
+
 	rootfs := "/mnt/" + e.containerName
 	imagePath := e.containerConfig.GetImage().GetImage()
 	{
 		sylog.Debugf("mounting tmpfs into /mnt")
 		_, err := rpcOps.Mount("tmpfs", "/mnt", "tmpfs", syscall.MS_NOSUID, "")
 		if err != nil {
-			return fmt.Errorf("could not mount tmpfs into /mnt: %s", err)
+			return fmt.Errorf("could not mount tmpfs into /mnt: %v", err)
 		}
 		file, err := os.Open(imagePath)
 		if err != nil {
@@ -88,22 +94,44 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	}
 
 	sylog.Debugf("mounting procfs")
-	_, err := rpcOps.Mount("proc", rootfs+"/proc", "proc", syscall.MS_NOSUID, "")
+	_, err := rpcOps.Mount("proc", filepath.Join(rootfs, "/proc"), "proc", syscall.MS_NOSUID, "")
 	if err != nil {
-		return fmt.Errorf("could not mount proc fs: %s", err)
+		return fmt.Errorf("could not mount proc fs: %v", err)
 	}
 	sylog.Debugf("mounting dev")
-	_, err = rpcOps.Mount("/dev", rootfs+"/dev", "udev", syscall.MS_NOSUID|syscall.MS_BIND, "")
+	_, err = rpcOps.Mount("/dev", filepath.Join(rootfs, "/dev"), "udev", syscall.MS_NOSUID|syscall.MS_BIND, "")
 	if err != nil {
-		return fmt.Errorf("could not mount udev: %s", err)
+		return fmt.Errorf("could not mount udev: %v", err)
 	}
 	sylog.Debugf("mounting sysfs")
-	_, err = rpcOps.Mount("sysfs", rootfs+"/sys", "sysfs", syscall.MS_NOSUID, "")
+	_, err = rpcOps.Mount("sysfs", filepath.Join(rootfs, "/sys"), "sysfs", syscall.MS_NOSUID, "")
 	if err != nil {
-		return fmt.Errorf("could not mount sysfs: %s", err)
+		return fmt.Errorf("could not mount sysfs: %v", err)
+	}
+	sylog.Debugf("mounting /tmp")
+	_, err = rpcOps.Mount("tmpfs", filepath.Join(rootfs, "/tmp"), "tmpfs", syscall.MS_NOSUID, "")
+	if err != nil {
+		return fmt.Errorf("could not mount /tmp: %v", err)
 	}
 
-	sylog.Debugf("set RPC mount propagation flag to SLAVE")
+	logFileName := filepath.Base(e.containerConfig.LogPath)
+	if logFileName != "" {
+		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.LogDirectory, e.containerConfig.LogPath))
+		contLogDir := filepath.Join(rootfs, "/tmp", "/logs")
+
+		sylog.Debugf("creating dir for logs")
+		_, err = rpcOps.Mkdir(contLogDir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("could not create log dir: %v", err)
+		}
+		sylog.Debugf("mounting log dir")
+		_, err = rpcOps.Mount(hostLogDir, contLogDir, "tempfs", syscall.MS_NOSUID|syscall.MS_BIND, "")
+		if err != nil {
+			return fmt.Errorf("could not mount log file: %v", err)
+		}
+	}
+
+	sylog.Debugf("setting mount propagation flag to SLAVE")
 	_, err = rpcOps.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
 	if err != nil {
 		return fmt.Errorf("could not set RPC mount propagation flag to SLAVE: %v", err)
@@ -112,10 +140,26 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not chroot: %v", err)
 	}
+	rpcOps.Ll("/proc/self/fd")
+	rpcOps.Ll("/tmp")
+	rpcOps.Ll("/tmp/logs")
+	rpcOps.Ll("/tmp/logs/testcontainer")
 
 	err = kube.AddInstanceFile(e.containerName, e.containerConfig.GetImage().GetImage(), containerPID, e.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
+	}
+
+	if logFileName != "" {
+		sylog.Debugf("redirecting io to log file")
+		err = rpcOps.RedirectIO(filepath.Join("/tmp", "/logs", logFileName))
+		if err != nil {
+			return fmt.Errorf("could not redirect io: %v", err)
+		}
+	}
+
+	if err := rpcOps.Ll("/proc/self/fd"); err != nil {
+		return fmt.Errorf("could not ll: %v", err)
 	}
 
 	sylog.Debugf("stopping container %q", e.containerName)
@@ -135,7 +179,7 @@ func ll(dir string) {
 	fii, _ := ioutil.ReadDir(dir)
 	sylog.Debugf("content of %s", dir)
 	for _, fi := range fii {
-		link, err := os.Readlink(filepath.Join(dir, fi.Name()))
-		sylog.Debugf("\t%s\t%s -> %s %v", fi.Mode().String(), fi.Name(), link, err)
+		link, _ := os.Readlink(filepath.Join(dir, fi.Name()))
+		sylog.Debugf("\t%s\t%s -> %s", fi.Mode().String(), fi.Name(), link)
 	}
 }
