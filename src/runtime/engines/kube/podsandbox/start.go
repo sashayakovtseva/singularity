@@ -33,6 +33,9 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	resolv, err := ioutil.ReadFile("/etc/resolv.conf")
 	sylog.Debugf("%s\n%v", resolv, err)
 
+	hostnameF, err := ioutil.ReadFile("/etc/hostname")
+	sylog.Debugf("%s\n%v", hostnameF, err)
+
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals)
 	for {

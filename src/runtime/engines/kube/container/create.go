@@ -16,6 +16,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/util/loop"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
+	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // CreateContainer creates a container. This method is called in the same
@@ -69,12 +70,14 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		} else {
 			return fmt.Errorf("unknown file system type: %v", fstype)
 		}
+		sylog.Debugf("detected %s mount type", mountType)
 		loopFlags := uint32(loop.FlagsAutoClear)
 		info := loop.Info64{
 			Offset:    uint64(part.Fileoff),
 			SizeLimit: uint64(part.Filelen),
 			Flags:     loopFlags,
 		}
+		sylog.Debugf("loop device info: %+v", info)
 		if err := file.Close(); err != nil {
 			return fmt.Errorf("could not close file: %v", err)
 		}
@@ -114,6 +117,9 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not mount /tmp: %v", err)
 	}
 
+	mounts, _ := ioutil.ReadFile("/proc/self/mountinfo")
+	fmt.Printf("mounts: %s\n", mounts)
+
 	logFileName := filepath.Base(e.containerConfig.LogPath)
 	if logFileName != "" {
 		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.LogDirectory, e.containerConfig.LogPath))
@@ -128,6 +134,44 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		_, err = rpcOps.Mount(hostLogDir, contLogDir, "tempfs", syscall.MS_NOSUID|syscall.MS_BIND, "")
 		if err != nil {
 			return fmt.Errorf("could not mount log file: %v", err)
+		}
+	}
+
+	for _, mount := range e.containerConfig.Mounts {
+		source := mount.HostPath
+		mi, err := os.Lstat(source)
+		if err != nil {
+			return fmt.Errorf("could not mount from host: %v", err)
+		}
+		if mi.Mode()&os.ModeSymlink == os.ModeSymlink {
+			source, err = os.Readlink(mount.HostPath)
+			if err != nil {
+				return fmt.Errorf("could follow symlink: %v", err)
+			}
+		}
+
+		target := filepath.Join(rootfs, mount.ContainerPath)
+		_, err = rpcOps.Mkdir(target, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("could not create directory in container: %v", err)
+		}
+
+		flags := syscall.MS_NOSUID | syscall.MS_BIND | syscall.MS_REC | syscall.MS_NODEV
+		if mount.Readonly {
+			flags |= syscall.MS_RDONLY
+		}
+		switch mount.GetPropagation() {
+		case v1alpha2.MountPropagation_PROPAGATION_PRIVATE:
+			flags |= syscall.MS_PRIVATE
+		case v1alpha2.MountPropagation_PROPAGATION_HOST_TO_CONTAINER:
+			flags |= syscall.MS_SLAVE
+		case v1alpha2.MountPropagation_PROPAGATION_BIDIRECTIONAL:
+			flags |= syscall.MS_SHARED
+		}
+
+		_, err = rpcOps.Mount(source, target, "", uintptr(flags), "")
+		if err != nil {
+			return fmt.Errorf("could not mount: %v", err)
 		}
 	}
 

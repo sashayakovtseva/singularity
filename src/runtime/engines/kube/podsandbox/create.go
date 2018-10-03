@@ -60,7 +60,9 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		if err != nil {
 			return fmt.Errorf("could not create temp file: %v", err)
 		}
-		defer os.Remove(temp.Name())
+		defer func() {
+			sylog.Debugf("removing temp resolv.conf: %v", os.Remove(temp.Name()))
+		}()
 		ioutil.WriteFile(temp.Name(), b.Bytes(), 0644)
 		sylog.Debugf("mounting resolv.conf file")
 		_, err = rpcOps.Mount(temp.Name(), "/etc/resolv.conf", "", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_BIND, "")

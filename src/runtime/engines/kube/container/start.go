@@ -28,7 +28,6 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	sylog.Debugf("starting container %q", e.containerName)
 
 	command := append(e.containerConfig.GetCommand(), e.containerConfig.GetArgs()...)
-	// Spawn and wait container process, signal handler
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

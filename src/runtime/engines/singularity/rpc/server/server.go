@@ -41,7 +41,7 @@ func (t *Methods) Mount(arguments *args.MountArgs, reply *int) (err error) {
 func (t *Methods) Mkdir(arguments *args.MkdirArgs, reply *int) (err error) {
 	mainthread.Execute(func() {
 		oldmask := syscall.Umask(0)
-		err = os.Mkdir(arguments.Path, arguments.Perm)
+		err = os.MkdirAll(arguments.Path, arguments.Perm)
 		syscall.Umask(oldmask)
 	})
 	return err
@@ -102,29 +102,25 @@ func (t *Methods) LoopDevice(arguments *args.LoopArgs, reply *int) error {
 		strFd := strings.TrimPrefix(arguments.Image, "/proc/self/fd/")
 		fd, err := strconv.ParseUint(strFd, 10, 32)
 		if err != nil {
-			return fmt.Errorf("failed to convert image file descriptor: %s", err)
+			return fmt.Errorf("failed to convert image file descriptor: %v", err)
 		}
 		image = os.NewFile(uintptr(fd), "")
-		if err != nil {
-			return fmt.Errorf("can't find image %s", arguments.Image)
-		}
 	} else {
 		var err error
-
 		image, err = os.OpenFile(arguments.Image, arguments.Mode, 0600)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not open image file: %v", err)
 		}
 	}
 
 	runtime.LockOSThread()
 	syscall.Setfsuid(0)
-
 	defer runtime.UnlockOSThread()
 	defer syscall.Setfsuid(os.Getuid())
 
-	if err := loopdev.AttachFromFile(image, arguments.Mode, reply); err != nil {
-		return err
+	err := loopdev.AttachFromFile(image, arguments.Mode, reply)
+	if err != nil {
+		return fmt.Errorf("could not attach image file too loop device: %v", err)
 	}
 	return loopdev.SetStatus(&arguments.Info)
 }
@@ -165,7 +161,7 @@ func (t *Methods) HasNamespace(arguments *args.HasNamespaceArgs, reply *int) err
 	return nil
 }
 
-// SetFsID sets filesystem uid and gid
+// SetFsID sets filesystem uid and gid.
 func (t *Methods) SetFsID(arguments *args.SetFsIDArgs, reply *int) error {
 	mainthread.Execute(func() {
 		syscall.Setfsuid(arguments.UID)
@@ -187,6 +183,7 @@ func (t *Methods) Ll(dir string, reply *struct{}) error {
 	return nil
 }
 
+// RedirectIO redirects standard output and error streams to file pointed with path.
 func (t *Methods) RedirectIO(path string, reply *struct{}) error {
 	io, err := os.OpenFile(path, syscall.O_RDWR, os.ModePerm)
 	if err != nil {
