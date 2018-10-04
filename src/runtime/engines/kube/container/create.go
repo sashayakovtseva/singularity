@@ -10,7 +10,10 @@ import (
 	"syscall"
 
 	"github.com/sylabs/sif/pkg/sif"
+	"github.com/sylabs/singularity/src/pkg/buildcfg"
 	"github.com/sylabs/singularity/src/pkg/sylog"
+	"github.com/sylabs/singularity/src/pkg/util/fs/layout"
+	"github.com/sylabs/singularity/src/pkg/util/fs/layout/layer/overlay"
 	"github.com/sylabs/singularity/src/pkg/util/loop"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
@@ -26,12 +29,10 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		Name:   e.CommonConfig.EngineName,
 	}
 
-	ll("/proc/self/ns")
-	rpcOps.Ll("/")
-	rpcOps.Ll("/proc/self/ns")
-	rpcOps.Ll("/proc/self/fd")
-	rpcOps.Ll("/tmp")
-	rpcOps.Ll("/tmp/log/pods/testpoduid/testcontainer")
+	sylog.Debugf("Creating overlay SESSIONDIR layout\n")
+	if c.session, err = layout.NewSession(buildcfg.SESSIONDIR, c.sessionFsType, c.sessionSize, system, overlay.New()); err != nil {
+		return err
+	}
 
 	imagePath := e.containerConfig.GetImage().GetImage()
 	containerPath := filepath.Join("/mnt", e.containerName)
@@ -49,7 +50,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not mount image: %v", err)
 	}
-	err = mountBinds(rpcOps, upperPath, e.containerConfig.Mounts)
+	err = prepareBinds(rpcOps, upperPath, e.containerConfig.Mounts)
 	if err != nil {
 		return fmt.Errorf("could not mount binds: %v", err)
 	}
@@ -73,6 +74,10 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not mount overlay: %v", err)
 	}
 
+	err = mountBinds(rpcOps, chrootPath, e.containerConfig.Mounts)
+	if err != nil {
+		return fmt.Errorf("could not mount system fs: %v", err)
+	}
 	err = mountSysFs(rpcOps, chrootPath)
 	if err != nil {
 		return fmt.Errorf("could not mount system fs: %v", err)
@@ -92,10 +97,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		}
 	}
 
-	rpcOps.Ll(upperPath)
-	rpcOps.Ll(upperPath + "/mounted1")
-	rpcOps.Ll(upperPath + "/mounted2")
-
 	_, err = rpcOps.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
 	if err != nil {
 		return fmt.Errorf("could not set RPC mount propagation flag to SLAVE: %v", err)
@@ -104,12 +105,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not chroot: %v", err)
 	}
-	rpcOps.Ll("/proc/self/fd")
-	rpcOps.Ll("/tmp")
-	rpcOps.Ll("/tmp/logs")
-	rpcOps.Ll("/")
-	rpcOps.Ll("/mounted1")
-	rpcOps.Ll("/mounted2")
 
 	err = kube.AddInstanceFile(e.containerName, imagePath, containerPID, e.CommonConfig)
 	if err != nil {
@@ -178,6 +173,17 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 	return nil
 }
 
+func prepareBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
+	for _, mount := range mounts {
+		target := filepath.Join(targetRoot, mount.ContainerPath)
+		_, err := rpcOps.Mkdir(target, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("could not create directory in for bind mount: %v", err)
+		}
+	}
+	return nil
+}
+
 func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
 	for _, mount := range mounts {
 		source := mount.HostPath
@@ -193,10 +199,6 @@ func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount)
 		}
 
 		target := filepath.Join(targetRoot, mount.ContainerPath)
-		_, err = rpcOps.Mkdir(target, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("could not create directory in for bind mount: %v", err)
-		}
 
 		flags := syscall.MS_NOSUID | syscall.MS_BIND | syscall.MS_REC | syscall.MS_NODEV
 		if mount.Readonly {
