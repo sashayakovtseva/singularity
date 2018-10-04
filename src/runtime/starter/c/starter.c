@@ -1002,24 +1002,19 @@ __attribute__((constructor)) static void init(void) {
         }
         close(rpc_socket[0]);
 
-        if ( get_nspath(mnt) == NULL ) {
-            /*
-             * fork is a convenient way to apply capabilities and privileges drop
-             * from single thread context before entering in stage 2
-             */
-            int process = fork();
-
-            if ( process == 0 ) {
+        if (get_nspath(mnt) == NULL) {
+            // fork is a convenient way to apply capabilities and privileges drop
+            // from single thread context before entering in stage 2
+            int process = fork_ns(CLONE_FS);
+            if (process == 0) {
                 singularity_message(VERBOSE, "Spawn RPC server\n");
                 execute = RPC_SERVER;
-            } else if ( process > 0 ) {
+            } else if (process > 0) {
                 int status;
-
-                if ( wait(&status) != process ) {
+                if (wait(&status) != process) {
                     singularity_message(ERROR, "Error while waiting RPC server: %s\n", strerror(errno));
                     exit(1);
                 }
-
                 prepare_scontainer_stage(SCONTAINER_STAGE2);
                 execute = SCONTAINER_STAGE2;
             } else {

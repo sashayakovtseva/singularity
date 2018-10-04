@@ -107,7 +107,3 @@ func (t *RPC) SetFsID(uid int, gid int) (int, error) {
 func (t *RPC) Ll(dir string) error {
 	return t.Client.Call(t.Name+".Ll", dir, nil)
 }
-
-func (t *RPC) RedirectIO(path string) error {
-	return t.Client.Call(t.Name+".RedirectIO", path, nil)
-}

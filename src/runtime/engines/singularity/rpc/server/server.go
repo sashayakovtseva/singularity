@@ -173,29 +173,13 @@ func (t *Methods) SetFsID(arguments *args.SetFsIDArgs, reply *int) error {
 func (t *Methods) Ll(dir string, reply *struct{}) error {
 	fii, err := ioutil.ReadDir(dir)
 	if err != nil {
+		sylog.Debugf("read %s error: %v", dir, err)
 		return err
 	}
 	sylog.Debugf("content of %s", dir)
 	for _, fi := range fii {
 		link, _ := os.Readlink(filepath.Join(dir, fi.Name()))
 		sylog.Debugf("\t%s\t%s -> %s", fi.Mode().String(), fi.Name(), link)
-	}
-	return nil
-}
-
-// RedirectIO redirects standard output and error streams to file pointed with path.
-func (t *Methods) RedirectIO(path string, reply *struct{}) error {
-	io, err := os.OpenFile(path, syscall.O_RDWR, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("could not open file: %v", err)
-	}
-	err = syscall.Dup3(int(io.Fd()), int(os.Stdout.Fd()), 0)
-	if err != nil {
-		return fmt.Errorf("could not redirect stdout: %v", err)
-	}
-	err = syscall.Dup3(int(io.Fd()), int(os.Stderr.Fd()), 0)
-	if err != nil {
-		return fmt.Errorf("could not redirect stderr: %v", err)
 	}
 	return nil
 }

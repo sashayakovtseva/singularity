@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
@@ -25,7 +26,6 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	for _, kv := range e.containerConfig.GetEnvs() {
 		envs = append(envs, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
 	}
-	sylog.Debugf("starting container %q", e.containerName)
 
 	command := append(e.containerConfig.GetCommand(), e.containerConfig.GetArgs()...)
 	cmd := exec.Command(command[0], command[1:]...)
@@ -34,9 +34,22 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	cmd.Stdin = os.Stdin
 	cmd.Env = envs
 
+	logFileName := filepath.Base(e.containerConfig.LogPath)
+	if logFileName != "" {
+		path := filepath.Join("/tmp", "/logs", logFileName)
+		io, err := os.OpenFile(path, syscall.O_RDWR, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("could not open log file: %v", err)
+		}
+		defer io.Close()
+		cmd.Stderr = io
+		cmd.Stdout = io
+	}
+
 	errChan := make(chan error, 1)
 	signals := make(chan os.Signal, 1)
 
+	sylog.Debugf("starting container %q", e.containerName)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("exec %v failed: %v", command, err)
 	}

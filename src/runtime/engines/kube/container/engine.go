@@ -139,7 +139,6 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		logs.Close()
 	}
 
-	// todo RunAsUser
 	// todo request UserNamespace?
 	return nil
 }
