@@ -7,9 +7,7 @@ package server
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -167,20 +165,6 @@ func (t *Methods) SetFsID(arguments *args.SetFsIDArgs, reply *int) error {
 		syscall.Setfsuid(arguments.UID)
 		syscall.Setfsgid(arguments.GID)
 	})
-	return nil
-}
-
-func (t *Methods) Ll(dir string, reply *struct{}) error {
-	fii, err := ioutil.ReadDir(dir)
-	if err != nil {
-		sylog.Debugf("read %s error: %v", dir, err)
-		return err
-	}
-	sylog.Debugf("content of %s", dir)
-	for _, fi := range fii {
-		link, _ := os.Readlink(filepath.Join(dir, fi.Name()))
-		sylog.Debugf("\t%s\t%s -> %s", fi.Mode().String(), fi.Name(), link)
-	}
 	return nil
 }
 

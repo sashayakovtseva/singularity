@@ -103,7 +103,3 @@ func (t *RPC) SetFsID(uid int, gid int) (int, error) {
 	err := t.Client.Call(t.Name+".SetFsID", arguments, &reply)
 	return reply, err
 }
-
-func (t *RPC) Ll(dir string) error {
-	return t.Client.Call(t.Name+".Ll", dir, nil)
-}

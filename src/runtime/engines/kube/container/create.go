@@ -2,7 +2,6 @@ package container
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/rpc"
 	"os"
@@ -12,8 +11,6 @@ import (
 	"github.com/sylabs/sif/pkg/sif"
 	"github.com/sylabs/singularity/src/pkg/buildcfg"
 	"github.com/sylabs/singularity/src/pkg/sylog"
-	"github.com/sylabs/singularity/src/pkg/util/fs/layout"
-	"github.com/sylabs/singularity/src/pkg/util/fs/layout/layer/overlay"
 	"github.com/sylabs/singularity/src/pkg/util/loop"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
@@ -29,21 +26,17 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		Name:   e.CommonConfig.EngineName,
 	}
 
-	sylog.Debugf("Creating overlay SESSIONDIR layout\n")
-	if c.session, err = layout.NewSession(buildcfg.SESSIONDIR, c.sessionFsType, c.sessionSize, system, overlay.New()); err != nil {
-		return err
-	}
-
+	sessionDir := buildcfg.SESSIONDIR
 	imagePath := e.containerConfig.GetImage().GetImage()
-	containerPath := filepath.Join("/mnt", e.containerName)
+	containerPath := filepath.Join(sessionDir, e.containerName)
 	lowerPath := filepath.Join(containerPath, "lower")
 	upperPath := filepath.Join(containerPath, "upper")
 	workPath := filepath.Join(containerPath, "work")
 	chrootPath := filepath.Join(containerPath, "root")
 
-	_, err := rpcOps.Mount("tmpfs", "/mnt", "tmpfs", syscall.MS_NOSUID, "")
+	_, err := rpcOps.Mount("tmpfs", sessionDir, "tmpfs", syscall.MS_NOSUID, "")
 	if err != nil {
-		return fmt.Errorf("could not mount tmpfs into /mnt: %v", err)
+		return fmt.Errorf("could not mount tmpfs into session directory %q: %v", sessionDir, err)
 	}
 
 	err = mountImage(rpcOps, imagePath, lowerPath)
@@ -239,17 +232,4 @@ func mountSysFs(rpcOps *client.RPC, root string) error {
 		return fmt.Errorf("could not mount /tmp: %v", err)
 	}
 	return nil
-}
-
-func ll(dir string) {
-	fii, err := ioutil.ReadDir(dir)
-	if err != nil {
-		sylog.Debugf("read %q error: %v", dir, err)
-		return
-	}
-	sylog.Debugf("content of %s", dir)
-	for _, fi := range fii {
-		link, _ := os.Readlink(filepath.Join(dir, fi.Name()))
-		sylog.Debugf("\t%s\t%s -> %s", fi.Mode().String(), fi.Name(), link)
-	}
 }
