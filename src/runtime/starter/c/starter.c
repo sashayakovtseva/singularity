@@ -170,54 +170,47 @@ static void prepare_scontainer_stage(int stage) {
         }
     }
 
-    if ( !(config.nsFlags & CLONE_NEWUSER) ) {
-        if ( prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) < 0 ) {
+    if (!(config.nsFlags & CLONE_NEWUSER)) {
+        if (prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) == -1) {
             singularity_message(ERROR, "Failed to set securebits: %s\n", strerror(errno));
             exit(1);
         }
 
-        /* apply target UID/GID for root user */
-        if ( uid == 0 ) {
-            if ( config.numGID != 0 ) {
+        // apply target UID/GID for root user
+        if (uid == 0) {
+            if (config.numGID != 0) {
                 singularity_message(DEBUG, "Clear additional group IDs\n");
-
                 if ( setgroups(0, NULL) < 0 ) {
-                    singularity_message(ERROR, "Unabled to clear additional group IDs: %s\n", strerror(errno));
+                    singularity_message(ERROR, "Could not clear additional group IDs: %s\n", strerror(errno));
                     exit(1);
                 }
             }
-
-            if ( config.numGID >= 2 ) {
+            if (config.numGID >= 2) {
                 singularity_message(DEBUG, "Set additional group IDs\n");
-
-                if ( setgroups(config.numGID-1, &config.targetGID[1]) < 0 ) {
+                if (setgroups(config.numGID-1, &config.targetGID[1]) == -1) {
                     singularity_message(ERROR, "Failed to set additional groups: %s\n", strerror(errno));
                     exit(1);
                 }
             }
-            if ( config.numGID >= 1 ) {
+            if (config.numGID >= 1) {
                 gid_t targetGID = config.targetGID[0];
-
                 singularity_message(DEBUG, "Set main group ID\n");
-
-                if ( setresgid(targetGID, targetGID, targetGID) < 0 ) {
+                if (setresgid(targetGID, targetGID, targetGID) == -1) {
                     singularity_message(ERROR, "Failed to set GID %d: %s\n", targetGID, strerror(errno));
                     exit(1);
                 }
             }
-            if ( config.targetUID != 0 ) {
+            if (config.targetUID != 0) {
                 uid_t targetUID = config.targetUID;
-
                 singularity_message(DEBUG, "Set user ID to %d\n", targetUID);
-
-                if ( setresuid(targetUID, targetUID, targetUID) < 0 ) {
-                    singularity_message(ERROR, "Faile to drop privileges: %s\n", strerror(errno));
+                if (setresuid(targetUID, targetUID, targetUID) == -1) {
+                    singularity_message(ERROR, "Failed to drop privileges: %s\n", strerror(errno));
                     exit(1);
                 }
             }
-        } else if ( config.isSuid ) {
-            if ( setresuid(uid, uid, uid) < 0 ) {
-                singularity_message(ERROR, "Faile to drop privileges: %s\n", strerror(errno));
+        } else if (config.isSuid) {
+            if (setresuid(uid, uid, uid) == -1) {
+                singularity_message(ERROR, "Failed to drop privileges: %s\n", strerror(errno));
                 exit(1);
             }
         }
@@ -1009,19 +1002,24 @@ __attribute__((constructor)) static void init(void) {
         }
         close(rpc_socket[0]);
 
-        if (get_nspath(mnt) == NULL) {
-            // fork is a convenient way to apply capabilities and privileges drop
-            // from single thread context before entering in stage 2
+        if ( get_nspath(mnt) == NULL ) {
+            /*
+             * fork is a convenient way to apply capabilities and privileges drop
+             * from single thread context before entering in stage 2
+             */
             int process = fork();
-            if (process == 0) {
+
+            if ( process == 0 ) {
                 singularity_message(VERBOSE, "Spawn RPC server\n");
                 execute = RPC_SERVER;
-            } else if (process > 0) {
+            } else if ( process > 0 ) {
                 int status;
-                if (wait(&status) != process) {
+
+                if ( wait(&status) != process ) {
                     singularity_message(ERROR, "Error while waiting RPC server: %s\n", strerror(errno));
                     exit(1);
                 }
+
                 prepare_scontainer_stage(SCONTAINER_STAGE2);
                 execute = SCONTAINER_STAGE2;
             } else {
