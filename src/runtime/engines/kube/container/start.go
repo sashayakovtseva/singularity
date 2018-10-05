@@ -31,9 +31,11 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		return fmt.Errorf("could not read %s: %v\n", envDir, err)
 	}
 	for _, fi := range fii {
-		err := exec.Command(filepath.Join(envDir, fi.Name())).Run()
+		path := filepath.Join(envDir, fi.Name())
+		out, err := exec.Command("/bin/sh", path).CombinedOutput()
+		sylog.Debugf("%s", out)
 		if err != nil {
-			return fmt.Errorf("could not exec %q: %v", fi.Name(), err)
+			return fmt.Errorf("could not exec %q: %v", path, err)
 		}
 	}
 
