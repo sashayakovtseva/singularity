@@ -171,25 +171,15 @@ static void prepare_scontainer_stage(int stage) {
     }
 
     if ( !(config.nsFlags & CLONE_NEWUSER) ) {
-        if ( prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) < 0 ) {
-            singularity_message(ERROR, "Failed to set securebits: %s\n", strerror(errno));
-            exit(1);
-        }
-
-        /* apply target UID/GID for root user */
-        if ( uid == 0 ) {
-            if ( config.numGID != 0 ) {
-    if ( !(config.nsFlags & CLONE_NEWUSER) ) {
-        /* apply target UID/GID for root user */
-        if ( uid == 0 ) {
-            if ( config.numGID != 0 || config.targetUID != 0 ) {
-                if ( prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) < 0 ) {
+        // apply target UID/GID for root user
+        if (uid == 0) {
+            if (config.numGID != 0 || config.targetUID != 0) {
+                if (prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) == -1) {
                     singularity_message(ERROR, "Failed to set securebits: %s\n", strerror(errno));
                     exit(1);
                 }
             }
-
-            if ( config.numGID != 0 ) {
+            if (config.numGID != 0) {
                 singularity_message(DEBUG, "Clear additional group IDs\n");
                 if ( setgroups(0, NULL) < 0 ) {
                     singularity_message(ERROR, "Could not clear additional group IDs: %s\n", strerror(errno));
@@ -219,13 +209,12 @@ static void prepare_scontainer_stage(int stage) {
                     exit(1);
                 }
             }
-        } else if ( config.isSuid ) {
-            if ( prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) < 0 ) {
+        } else if (config.isSuid) {
+            if (prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) == -1) {
                 singularity_message(ERROR, "Failed to set securebits: %s\n", strerror(errno));
                 exit(1);
             }
-
-            if ( setresuid(uid, uid, uid) < 0 ) {
+            if (setresuid(uid, uid, uid) == -1) {
                 singularity_message(ERROR, "Faile to drop privileges: %s\n", strerror(errno));
                 exit(1);
             }
