@@ -26,14 +26,15 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		Name:   e.CommonConfig.EngineName,
 	}
 
-	sessionDir := buildcfg.SESSIONDIR
-	imagePath := e.containerConfig.GetImage().GetImage()
-	containerPath := filepath.Join(sessionDir, e.containerName)
-	lowerPath := filepath.Join(containerPath, "lower")
-	upperPath := filepath.Join(containerPath, "upper")
-	workPath := filepath.Join(containerPath, "work")
-	chrootPath := filepath.Join(containerPath, "root")
-
+	var (
+		sessionDir    = buildcfg.SESSIONDIR
+		imagePath     = e.containerConfig.GetImage().GetImage()
+		containerPath = filepath.Join(sessionDir, e.containerName)
+		lowerPath     = filepath.Join(containerPath, "lower")
+		upperPath     = filepath.Join(containerPath, "upper")
+		workPath      = filepath.Join(containerPath, "work")
+		chrootPath    = filepath.Join(containerPath, "root")
+	)
 	_, err := rpcOps.Mount("tmpfs", sessionDir, "tmpfs", syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount tmpfs into session directory %q: %v", sessionDir, err)
@@ -56,9 +57,9 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not create root directory for overlay: %v", err)
 	}
-	overlayOpts := fmt.Sprintf("lowerdir=%s,workdir=%s", lowerPath, workPath)
+	overlayOpts := fmt.Sprintf("lowerdir=%s", lowerPath)
 	if len(e.containerConfig.Mounts) != 0 {
-		overlayOpts += fmt.Sprintf(",upperdir=%s", upperPath)
+		overlayOpts += fmt.Sprintf(",workdir=%s,upperdir=%s", workPath, upperPath)
 	}
 
 	sylog.Debugf("mounting overlay with options: %v", overlayOpts)
@@ -79,7 +80,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	logFileName := filepath.Base(e.containerConfig.LogPath)
 	if logFileName != "" {
 		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.LogDirectory, e.containerConfig.LogPath))
-		contLogDir := filepath.Join(chrootPath, "/tmp", "/logs")
+		contLogDir := filepath.Join(chrootPath, "/tmp/logs")
 		_, err = rpcOps.Mkdir(contLogDir, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create log dir: %v", err)
