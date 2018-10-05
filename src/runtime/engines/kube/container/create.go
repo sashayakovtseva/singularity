@@ -27,28 +27,35 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	}
 
 	var (
-		sessionDir    = buildcfg.SESSIONDIR
 		imagePath     = e.containerConfig.GetImage().GetImage()
-		containerPath = filepath.Join(sessionDir, e.containerName)
+		containerPath = filepath.Join(buildcfg.SESSIONDIR, e.containerName)
 		lowerPath     = filepath.Join(containerPath, "lower")
 		upperPath     = filepath.Join(containerPath, "upper")
 		workPath      = filepath.Join(containerPath, "work")
 		chrootPath    = filepath.Join(containerPath, "root")
 	)
-	_, err := rpcOps.Mount("tmpfs", sessionDir, "tmpfs", syscall.MS_NOSUID, "")
+	_, err := rpcOps.Mkdir(containerPath, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("could not mount tmpfs into session directory %q: %v", sessionDir, err)
+		return fmt.Errorf("could not create directory for container: %v", err)
+	}
+	_, err = rpcOps.Mount("tmpfs", chrootPath, "tmpfs", syscall.MS_NOSUID, "")
+	if err != nil {
+		return fmt.Errorf("could not mount tmpfs into container directory %q: %v", containerPath, err)
 	}
 
 	err = mountImage(rpcOps, imagePath, lowerPath)
 	if err != nil {
 		return fmt.Errorf("could not mount image: %v", err)
 	}
-	err = prepareBinds(rpcOps, upperPath, e.containerConfig.Mounts)
+	err = prepareBinds(rpcOps, upperPath, e.containerConfig.GetMounts())
 	if err != nil {
 		return fmt.Errorf("could not mount binds: %v", err)
 	}
 
+	_, err = rpcOps.Mkdir(upperPath, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("could not create upper directory for overlay: %v", err)
+	}
 	_, err = rpcOps.Mkdir(workPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not create working directory for overlay: %v", err)
@@ -57,10 +64,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not create root directory for overlay: %v", err)
 	}
-	overlayOpts := fmt.Sprintf("lowerdir=%s", lowerPath)
-	if len(e.containerConfig.Mounts) != 0 {
-		overlayOpts += fmt.Sprintf(",workdir=%s,upperdir=%s", workPath, upperPath)
-	}
+	overlayOpts := fmt.Sprintf("lowerdir=%s,workdir=%s,upperdir=%s", lowerPath, workPath, upperPath)
 
 	sylog.Debugf("mounting overlay with options: %v", overlayOpts)
 	_, err = rpcOps.Mount("overlay", chrootPath, "overlay", syscall.MS_NOSUID|syscall.MS_REC, overlayOpts)
@@ -68,7 +72,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not mount overlay: %v", err)
 	}
 
-	err = mountBinds(rpcOps, chrootPath, e.containerConfig.Mounts)
+	err = mountBinds(rpcOps, chrootPath, e.containerConfig.GetMounts())
 	if err != nil {
 		return fmt.Errorf("could not mount system fs: %v", err)
 	}
@@ -77,17 +81,17 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not mount system fs: %v", err)
 	}
 
-	logFileName := filepath.Base(e.containerConfig.LogPath)
-	if logFileName != "" {
-		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.LogDirectory, e.containerConfig.LogPath))
+	if e.containerConfig.GetLogPath() != "" {
+		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.GetLogDirectory(), e.containerConfig.GetLogPath()))
 		contLogDir := filepath.Join(chrootPath, "/tmp/logs")
 		_, err = rpcOps.Mkdir(contLogDir, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create log dir: %v", err)
 		}
+		sylog.Debugf("mounting log directory %q to %q", hostLogDir, contLogDir)
 		_, err = rpcOps.Mount(hostLogDir, contLogDir, "tempfs", syscall.MS_NOSUID|syscall.MS_BIND, "")
 		if err != nil {
-			return fmt.Errorf("could not mount log file: %v", err)
+			return fmt.Errorf("could not mount log directory: %v", err)
 		}
 	}
 
@@ -169,7 +173,7 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 
 func prepareBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
 	for _, mount := range mounts {
-		target := filepath.Join(targetRoot, mount.ContainerPath)
+		target := filepath.Join(targetRoot, mount.GetContainerPath())
 		_, err := rpcOps.Mkdir(target, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create directory in for bind mount: %v", err)
@@ -180,22 +184,22 @@ func prepareBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Moun
 
 func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
 	for _, mount := range mounts {
-		source := mount.HostPath
+		source := mount.GetHostPath()
 		mi, err := os.Lstat(source)
 		if err != nil {
 			return fmt.Errorf("invalid bind mount source: %v", err)
 		}
 		if mi.Mode()&os.ModeSymlink == os.ModeSymlink {
-			source, err = os.Readlink(mount.HostPath)
+			source, err = os.Readlink(mount.GetHostPath())
 			if err != nil {
 				return fmt.Errorf("could follow mount source symlink: %v", err)
 			}
 		}
 
-		target := filepath.Join(targetRoot, mount.ContainerPath)
+		target := filepath.Join(targetRoot, mount.GetContainerPath())
 
 		flags := syscall.MS_NOSUID | syscall.MS_BIND | syscall.MS_REC | syscall.MS_NODEV
-		if mount.Readonly {
+		if mount.GetReadonly() {
 			flags |= syscall.MS_RDONLY
 		}
 		switch mount.GetPropagation() {

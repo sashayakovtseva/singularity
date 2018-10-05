@@ -29,10 +29,10 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		Name:   e.CommonConfig.EngineName,
 	}
 
-	if e.podConfig.Hostname != "" {
-		sylog.Debugf("setting hostname to %q", e.podConfig.Hostname)
-		if _, err := rpcOps.SetHostname(e.podConfig.Hostname); err != nil {
-			sylog.Errorf("failed to set hostname to %q: %v", e.podConfig.Hostname, err)
+	if e.podConfig.GetHostname() != "" {
+		sylog.Debugf("setting hostname to %q", e.podConfig.GetHostname())
+		if _, err := rpcOps.SetHostname(e.podConfig.GetHostname()); err != nil {
+			sylog.Errorf("failed to set hostname to %q: %v", e.podConfig.GetHostname(), err)
 		}
 	}
 

@@ -2,6 +2,7 @@ package container
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -14,6 +15,9 @@ import (
 
 // StartProcess starts container.
 func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
+	const envDir = "/.singularity.d/env"
+	const runscript = "/.singularity.d/runscript"
+
 	if e.containerConfig.WorkingDir != "" {
 		sylog.Debugf("changing working directory to %q", e.containerConfig.WorkingDir)
 		err := os.Chdir(e.containerConfig.WorkingDir)
@@ -22,24 +26,41 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		}
 	}
 
-	var envs []string
+	fii, err := ioutil.ReadDir(envDir)
+	if err != nil {
+		return fmt.Errorf("could not read %s: %v\n", envDir, err)
+	}
+	for _, fi := range fii {
+		err := exec.Command(filepath.Join(envDir, fi.Name())).Run()
+		if err != nil {
+			return fmt.Errorf("could not exec %q: %v", fi.Name(), err)
+		}
+	}
+
 	for _, kv := range e.containerConfig.GetEnvs() {
-		envs = append(envs, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
+		err := os.Setenv(kv.Key, kv.Value)
+		if err != nil {
+			return fmt.Errorf("could not set environment: %v", err)
+		}
 	}
 
 	command := append(e.containerConfig.GetCommand(), e.containerConfig.GetArgs()...)
+	if len(command) == 0 {
+		command = []string{runscript}
+	}
+
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = envs
 
-	logFileName := filepath.Base(e.containerConfig.LogPath)
-	if logFileName != "" {
-		path := filepath.Join("/tmp", "/logs", logFileName)
+	if e.containerConfig.GetLogPath() != "" {
+		logFileName := filepath.Base(e.containerConfig.GetLogPath())
+		path := filepath.Join("/tmp/logs", logFileName)
+		sylog.Debugf("redirecting io to %q", path)
 		io, err := os.OpenFile(path, syscall.O_RDWR, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("could not open log file: %v", err)
+			return fmt.Errorf("could not open log file %q: %v", path, err)
 		}
 		defer io.Close()
 		cmd.Stderr = io

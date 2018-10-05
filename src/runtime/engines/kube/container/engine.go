@@ -34,14 +34,13 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	e.createContainerRequest = cfg.EngineConfig.(*v1alpha2.CreateContainerRequest)
 	e.containerConfig = e.createContainerRequest.GetConfig()
 	meta := e.containerConfig.GetMetadata()
-	e.containerName = fmt.Sprintf("%s_%s_%d", e.createContainerRequest.PodSandboxId, meta.Name, meta.Attempt)
+	e.containerName = fmt.Sprintf("%s_%s_%d", e.createContainerRequest.GetPodSandboxId(), meta.GetName(), meta.GetAttempt())
 	e.podConfig = e.createContainerRequest.GetSandboxConfig()
 	e.security = e.containerConfig.GetLinux().GetSecurityContext()
 }
 
 // Config returns empty CreateContainerRequest that will be filled later with received JSON data.
 func (e *EngineOperations) Config() interface{} {
-	sylog.Debugf("will return zeroed %T", v1alpha2.CreateContainerRequest{})
 	return new(v1alpha2.CreateContainerRequest)
 }
 
@@ -51,9 +50,9 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	conf.SetInstance(true)
 	conf.SetMountPropagation("shared")
 
-	podInst, err := instance.Get(e.createContainerRequest.PodSandboxId)
+	podInst, err := instance.Get(e.createContainerRequest.GetPodSandboxId())
 	if err != nil {
-		return fmt.Errorf("could not get pod instance %q: %v", e.createContainerRequest.PodSandboxId, err)
+		return fmt.Errorf("could not get pod instance %q: %v", e.createContainerRequest.GetPodSandboxId(), err)
 	}
 	podNsPath := fmt.Sprintf(`/proc/%d/ns`, podInst.Pid)
 
@@ -68,7 +67,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		Type: specs.PIDNamespace,
 	})
 
-	if e.podConfig.Hostname != "" {
+	if e.podConfig.GetHostname() != "" {
 		sylog.Debugf("joining pod's UTS namespace")
 		joinNs = append(joinNs, specs.LinuxNamespace{
 			Type: specs.UTSNamespace,
@@ -76,57 +75,40 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		})
 	}
 
-	if e.security != nil {
-		conf.SetNoNewPrivs(e.security.NoNewPrivs)
-		opts := e.security.GetNamespaceOptions()
-		if opts != nil {
-			//if opts.Pid == v1alpha2.NamespaceMode_CONTAINER {
-			//	sylog.Debugf("requesting PID namespace")
-			//	createNs = append(joinNs, specs.LinuxNamespace{
-			//		Type: specs.PIDNamespace,
-			//	})
-			//} else if opts.Pid == v1alpha2.NamespaceMode_POD {
-			//	sylog.Debugf("joining pod's PID namespace")
-			//	joinNs = append(joinNs, specs.LinuxNamespace{
-			//		Type: specs.PIDNamespace,
-			//		Path: filepath.Join(podNsPath, "pid"),
-			//	})
-			//}
-
-			switch opts.GetIpc() {
-			case v1alpha2.NamespaceMode_CONTAINER:
-				sylog.Debugf("requesting IPC namespace")
-				createNs = append(joinNs, specs.LinuxNamespace{
-					Type: specs.IPCNamespace,
-				})
-			case v1alpha2.NamespaceMode_POD:
-				sylog.Debugf("joining pod's IPC namespace")
-				joinNs = append(joinNs, specs.LinuxNamespace{
-					Type: specs.IPCNamespace,
-					Path: filepath.Join(podNsPath, "ipc"),
-				})
-			}
-
-			switch opts.GetNetwork() {
-			case v1alpha2.NamespaceMode_CONTAINER:
-				sylog.Debugf("requesting NET namespace")
-				createNs = append(joinNs, specs.LinuxNamespace{
-					Type: specs.NetworkNamespace,
-				})
-			case v1alpha2.NamespaceMode_POD:
-				sylog.Debugf("joining pod's NET namespace")
-				joinNs = append(joinNs, specs.LinuxNamespace{
-					Type: specs.NetworkNamespace,
-					Path: filepath.Join(podNsPath, "net"),
-				})
-			}
-		}
+	conf.SetNoNewPrivs(e.security.GetNoNewPrivs())
+	switch e.security.GetNamespaceOptions().GetIpc() {
+	case v1alpha2.NamespaceMode_CONTAINER:
+		sylog.Debugf("requesting IPC namespace")
+		createNs = append(joinNs, specs.LinuxNamespace{
+			Type: specs.IPCNamespace,
+		})
+	case v1alpha2.NamespaceMode_POD:
+		sylog.Debugf("joining pod's IPC namespace")
+		joinNs = append(joinNs, specs.LinuxNamespace{
+			Type: specs.IPCNamespace,
+			Path: filepath.Join(podNsPath, "ipc"),
+		})
 	}
+
+	switch e.security.GetNamespaceOptions().GetNetwork() {
+	case v1alpha2.NamespaceMode_CONTAINER:
+		sylog.Debugf("requesting NET namespace")
+		createNs = append(joinNs, specs.LinuxNamespace{
+			Type: specs.NetworkNamespace,
+		})
+	case v1alpha2.NamespaceMode_POD:
+		sylog.Debugf("joining pod's NET namespace")
+		joinNs = append(joinNs, specs.LinuxNamespace{
+			Type: specs.NetworkNamespace,
+			Path: filepath.Join(podNsPath, "net"),
+		})
+	}
+
 	conf.SetNsPathFromSpec(joinNs)
 	conf.SetNsFlagsFromSpec(createNs)
 
-	if e.containerConfig.LogPath != "" {
-		logPath := filepath.Join(e.podConfig.LogDirectory, e.containerConfig.LogPath)
+	if e.containerConfig.GetLogPath() != "" {
+		logPath := filepath.Join(e.podConfig.LogDirectory, e.containerConfig.GetLogPath())
 		err := os.MkdirAll(filepath.Dir(logPath), os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create log directory: %v", err)

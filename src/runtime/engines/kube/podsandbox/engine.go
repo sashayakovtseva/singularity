@@ -35,14 +35,13 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	e.CommonConfig = cfg
 	e.podConfig = cfg.EngineConfig.(*v1alpha2.PodSandboxConfig)
 	meta := e.podConfig.GetMetadata()
-	e.podName = fmt.Sprintf("%s_%s_%s_%d", meta.Name, meta.Namespace, meta.Uid, meta.Attempt)
+	e.podName = fmt.Sprintf("%s_%s_%s_%d", meta.GetName(), meta.GetNamespace(), meta.GetUid(), meta.GetAttempt())
 	e.security = e.podConfig.GetLinux().GetSecurityContext()
 
 }
 
 // Config returns empty PodSandboxConfig that will be filled later with received JSON data.
 func (e *EngineOperations) Config() interface{} {
-	sylog.Debugf("will return zeroed %T", v1alpha2.PodSandboxConfig{})
 	return new(v1alpha2.PodSandboxConfig)
 }
 
@@ -57,41 +56,37 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		Type: specs.MountNamespace,
 	})
 
-	if e.podConfig.Hostname != "" {
+	if e.podConfig.GetHostname() != "" {
 		sylog.Debugf("requesting UTS namespace")
 		namespaces = append(namespaces, specs.LinuxNamespace{
 			Type: specs.UTSNamespace,
 		})
 	}
 
-	if e.security != nil {
-		conf.SetNoNewPrivs(!e.security.Privileged)
-		if e.security.GetNamespaceOptions() != nil {
-			if e.security.GetNamespaceOptions().GetNetwork() == v1alpha2.NamespaceMode_POD {
-				sylog.Debugf("requesting NET namespace")
-				namespaces = append(namespaces, specs.LinuxNamespace{
-					Type: specs.NetworkNamespace,
-				})
-			}
-			if e.security.GetNamespaceOptions().GetPid() == v1alpha2.NamespaceMode_POD {
-				sylog.Debugf("requesting PID namespace")
-				namespaces = append(namespaces, specs.LinuxNamespace{
-					Type: specs.PIDNamespace,
-				})
-			}
-			if e.security.GetNamespaceOptions().GetIpc() == v1alpha2.NamespaceMode_POD {
-				sylog.Debugf("requesting IPC namespace")
-				namespaces = append(namespaces, specs.LinuxNamespace{
-					Type: specs.IPCNamespace,
-				})
-			}
-		}
+	if e.security.GetNamespaceOptions().GetNetwork() == v1alpha2.NamespaceMode_POD {
+		sylog.Debugf("requesting NET namespace")
+		namespaces = append(namespaces, specs.LinuxNamespace{
+			Type: specs.NetworkNamespace,
+		})
 	}
+	if e.security.GetNamespaceOptions().GetPid() == v1alpha2.NamespaceMode_POD {
+		sylog.Debugf("requesting PID namespace")
+		namespaces = append(namespaces, specs.LinuxNamespace{
+			Type: specs.PIDNamespace,
+		})
+	}
+	if e.security.GetNamespaceOptions().GetIpc() == v1alpha2.NamespaceMode_POD {
+		sylog.Debugf("requesting IPC namespace")
+		namespaces = append(namespaces, specs.LinuxNamespace{
+			Type: specs.IPCNamespace,
+		})
+	}
+	conf.SetNoNewPrivs(!e.security.GetPrivileged())
 	conf.SetNsFlagsFromSpec(namespaces)
 
-	if e.podConfig.LogDirectory != "" {
+	if e.podConfig.GetLogDirectory() != "" {
 		sylog.Debugf("creating log directory")
-		err := os.MkdirAll(e.podConfig.LogDirectory, os.ModePerm)
+		err := os.MkdirAll(e.podConfig.GetLogDirectory(), os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create log directory for pod %q", e.podName)
 		}
