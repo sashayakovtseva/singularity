@@ -38,7 +38,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not create directory for container: %v", err)
 	}
-	_, err = rpcOps.Mount("tmpfs", chrootPath, "tmpfs", syscall.MS_NOSUID, "")
+	_, err = rpcOps.Mount("tmpfs", containerPath, "tmpfs", syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount tmpfs into container directory %q: %v", containerPath, err)
 	}
