@@ -142,6 +142,9 @@ func create(engine *EngineOperations, rpcOps *client.RPC, pid int) error {
 	if err := c.addHostnameMount(system); err != nil {
 		return err
 	}
+	if err := c.addActionsMount(system); err != nil {
+		return err
+	}
 
 	sylog.Debugf("Mount all")
 	if err := system.MountAll(); err != nil {
@@ -386,6 +389,10 @@ func (c *container) mount(point *mount.Point) error {
 			flags, _ := mount.ConvertOptions(point.Options)
 			if flags&syscall.MS_REMOUNT != 0 {
 				return fmt.Errorf("can't remount %s: %s", point.Destination, err)
+			}
+			// mount error for filesystems is considered fatal
+			if point.Type != "" {
+				return fmt.Errorf("can't mount %s filesystem to %s: %s", point.Type, point.Destination, err)
 			}
 			sylog.Verbosef("can't mount %s: %s", point.Source, err)
 			return nil
@@ -1437,6 +1444,54 @@ func (c *container) addCwdMount(system *mount.System) error {
 }
 
 func (c *container) addLibsMount(system *mount.System) error {
+	sylog.Debugf("Checking for 'user bind control' in configuration file")
+	if !c.engine.EngineConfig.File.UserBindControl {
+		sylog.Warningf("Ignoring libraries bind request: user bind control disabled by system administrator")
+		return nil
+	}
+
+	flags := uintptr(syscall.MS_BIND | syscall.MS_NOSUID | syscall.MS_NODEV | syscall.MS_RDONLY | syscall.MS_REC)
+
+	containerDir := "/.singularity.d/libs"
+	sessionDir := "/libs"
+
+	if err := c.session.AddDir(sessionDir); err != nil {
+		return err
+	}
+
+	libraries := c.engine.EngineConfig.GetLibrariesPath()
+
+	for _, lib := range libraries {
+		sylog.Debugf("Add library %s to mount list", lib)
+
+		file := filepath.Base(lib)
+		sessionFile := filepath.Join(sessionDir, file)
+
+		if err := c.session.AddFile(sessionFile, []byte{}); err != nil {
+			return err
+		}
+
+		sessionFilePath, _ := c.session.GetPath(sessionFile)
+
+		err := system.Points.AddBind(mount.FilesTag, lib, sessionFilePath, flags)
+		if err != nil {
+			return fmt.Errorf("unable to add %s to mount list: %s", lib, err)
+		}
+
+		system.Points.AddRemount(mount.FilesTag, sessionFilePath, flags)
+	}
+
+	if len(libraries) > 0 {
+		sessionDirPath, _ := c.session.GetPath(sessionDir)
+
+		err := system.Points.AddBind(mount.FilesTag, sessionDirPath, containerDir, flags)
+		if err != nil {
+			return fmt.Errorf("unable to add %s to mount list: %s", sessionDirPath, err)
+		}
+
+		return system.Points.AddRemount(mount.FilesTag, containerDir, flags)
+	}
+
 	return nil
 }
 
@@ -1575,4 +1630,17 @@ func (c *container) addHostnameMount(system *mount.System) error {
 		sylog.Debugf("Skipping hostname mount, not virtualizing UTS namespace on user request")
 	}
 	return nil
+}
+
+func (c *container) addActionsMount(system *mount.System) error {
+	hostDir := filepath.Join(buildcfg.SYSCONFDIR, "/singularity/actions")
+	containerDir := "/.singularity.d/actions"
+	flags := uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_NOSUID | syscall.MS_NODEV)
+
+	err := system.Points.AddBind(mount.BindsTag, hostDir, containerDir, flags)
+	if err != nil {
+		return fmt.Errorf("unable to add %s to mount list: %s", containerDir, err)
+	}
+
+	return system.Points.AddRemount(mount.BindsTag, containerDir, flags)
 }
