@@ -39,10 +39,12 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		workPath      = filepath.Join(containerPath, "work")
 		chrootPath    = filepath.Join(containerPath, "root")
 	)
+	sylog.Debugf("creating %s", containerPath)
 	_, err = rpcOps.Mkdir(containerPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not create directory for container: %v", err)
 	}
+	sylog.Debugf("mounting tmpfs into %s", containerPath)
 	_, err = rpcOps.Mount("tmpfs", containerPath, "tmpfs", syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount tmpfs into container directory %q: %v", containerPath, err)
@@ -57,20 +59,23 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		return fmt.Errorf("could not mount binds: %v", err)
 	}
 
+	sylog.Debugf("creating %s", upperPath)
 	_, err = rpcOps.Mkdir(upperPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not create upper directory for overlay: %v", err)
 	}
+	sylog.Debugf("creating %s", workPath)
 	_, err = rpcOps.Mkdir(workPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not create working directory for overlay: %v", err)
 	}
+	sylog.Debugf("creating %s", chrootPath)
 	_, err = rpcOps.Mkdir(chrootPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not create root directory for overlay: %v", err)
 	}
-	overlayOpts := fmt.Sprintf("lowerdir=%s,workdir=%s,upperdir=%s", lowerPath, workPath, upperPath)
 
+	overlayOpts := fmt.Sprintf("lowerdir=%s,workdir=%s,upperdir=%s", lowerPath, workPath, upperPath)
 	sylog.Debugf("mounting overlay with options: %v", overlayOpts)
 	_, err = rpcOps.Mount("overlay", chrootPath, "overlay", syscall.MS_NOSUID|syscall.MS_REC, overlayOpts)
 	if err != nil {
@@ -141,9 +146,7 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 		return err
 	}
 	var mountType string
-	if fstype == sif.FsSquash {
-		mountType = "squashfs"
-	} else {
+	if fstype != sif.FsSquash {
 		return fmt.Errorf("unsuported image fs type: %v", fstype)
 	}
 	loopFlags := uint32(loop.FlagsAutoClear)
@@ -152,19 +155,23 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 		SizeLimit: uint64(part.Filelen),
 		Flags:     loopFlags,
 	}
-
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("could not close file: %v", err)
 	}
+
+	sylog.Debugf("mounting %s into loop device", imagePath)
 	dev, err := rpcOps.LoopDevice(imagePath, os.O_RDWR, info)
 	if err != nil {
 		return fmt.Errorf("could not attach loop dev: %v", err)
 	}
 
+	sylog.Debugf("creating %s", targetPath)
 	_, err = rpcOps.Mkdir(targetPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not make lowerdir for overlay: %v", err)
 	}
+
+	sylog.Debugf("mounting loop device #%d into %s", dev, imagePath)
 	_, err = rpcOps.Mount(fmt.Sprintf("/dev/loop%d", dev), targetPath, mountType, syscall.MS_NOSUID|syscall.MS_REC, "")
 	if err != nil {
 		return fmt.Errorf("could not mount loop device: %v", err)
@@ -175,6 +182,7 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 func prepareBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
 	for _, mount := range mounts {
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
+		sylog.Debugf("creating %s", target)
 		_, err := rpcOps.Mkdir(target, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("could not create directory in for bind mount: %v", err)
@@ -212,6 +220,7 @@ func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount)
 			flags |= syscall.MS_SHARED
 		}
 
+		sylog.Debugf("mounting %s to %s", source, target)
 		_, err = rpcOps.Mount(source, target, "", uintptr(flags), "")
 		if err != nil {
 			return fmt.Errorf("could not bind mount: %v", err)
@@ -221,19 +230,30 @@ func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount)
 }
 
 func mountSysFs(rpcOps *client.RPC, root string) error {
-	_, err := rpcOps.Mount("proc", filepath.Join(root, "/proc"), "proc", syscall.MS_NOSUID, "")
+	procPath := filepath.Join(root, "/proc")
+	sylog.Debugf("mounting proc into %s", procPath)
+	_, err := rpcOps.Mount("proc", procPath, "proc", syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount proc fs: %v", err)
 	}
-	_, err = rpcOps.Mount("/dev", filepath.Join(root, "/dev"), "udev", syscall.MS_NOSUID|syscall.MS_BIND, "")
+
+	devPath := filepath.Join(root, "/dev")
+	sylog.Debugf("mounting /dev into %s", devPath)
+	_, err = rpcOps.Mount("/dev", devPath, "udev", syscall.MS_NOSUID|syscall.MS_BIND, "")
 	if err != nil {
 		return fmt.Errorf("could not mount udev: %v", err)
 	}
+
+	sysPath := filepath.Join(root, "/sys")
+	sylog.Debugf("mounting sysfs into %s", sysPath)
 	_, err = rpcOps.Mount("sysfs", filepath.Join(root, "/sys"), "sysfs", syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount sysfs: %v", err)
 	}
-	_, err = rpcOps.Mount("tmpfs", filepath.Join(root, "/tmp"), "tmpfs", syscall.MS_NOSUID, "")
+
+	tmpPath := filepath.Join(root, "/tmp")
+	sylog.Debugf("mounting tmpfs into %s", tmpPath)
+	_, err = rpcOps.Mount("tmpfs", tmpPath, "tmpfs", syscall.MS_NOSUID, "")
 	if err != nil {
 		return fmt.Errorf("could not mount /tmp: %v", err)
 	}
