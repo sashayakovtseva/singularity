@@ -40,7 +40,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		chrootPath    = filepath.Join(containerPath, "root")
 	)
 	sylog.Debugf("creating %s", containerPath)
-	_, err = rpcOps.Mkdir(containerPath, os.ModePerm)
+	_, err = rpcOps.Mkdir(containerPath, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create directory for container: %v", err)
 	}
@@ -60,17 +60,17 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	}
 
 	sylog.Debugf("creating %s", upperPath)
-	_, err = rpcOps.Mkdir(upperPath, os.ModePerm)
+	_, err = rpcOps.Mkdir(upperPath, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create upper directory for overlay: %v", err)
 	}
 	sylog.Debugf("creating %s", workPath)
-	_, err = rpcOps.Mkdir(workPath, os.ModePerm)
+	_, err = rpcOps.Mkdir(workPath, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create working directory for overlay: %v", err)
 	}
 	sylog.Debugf("creating %s", chrootPath)
-	_, err = rpcOps.Mkdir(chrootPath, os.ModePerm)
+	_, err = rpcOps.Mkdir(chrootPath, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create root directory for overlay: %v", err)
 	}
@@ -94,7 +94,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if e.containerConfig.GetLogPath() != "" {
 		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.GetLogDirectory(), e.containerConfig.GetLogPath()))
 		contLogDir := filepath.Join(chrootPath, "/tmp/logs")
-		_, err = rpcOps.Mkdir(contLogDir, os.ModePerm)
+		_, err = rpcOps.Mkdir(contLogDir, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create log dir: %v", err)
 		}
@@ -165,7 +165,7 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 	}
 
 	sylog.Debugf("creating %s", targetPath)
-	_, err = rpcOps.Mkdir(targetPath, os.ModePerm)
+	_, err = rpcOps.Mkdir(targetPath, 0755)
 	if err != nil {
 		return fmt.Errorf("could not make lowerdir for overlay: %v", err)
 	}
@@ -182,7 +182,7 @@ func createBindDirs(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mo
 	for _, mount := range mounts {
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
 		sylog.Debugf("creating %s", target)
-		_, err := rpcOps.Mkdir(target, os.ModePerm)
+		_, err := rpcOps.Mkdir(target, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create directory in for bind mount: %v", err)
 		}

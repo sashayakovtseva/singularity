@@ -19,6 +19,12 @@ var (
 	ErrNotFound = fmt.Errorf("not found")
 )
 
+const (
+	InfoStoragePath = "/var/run/singularity/info"
+
+	StatusFile = "status"
+)
+
 // AddInstanceFile adds instance file with given name.
 func AddInstanceFile(name, image string, pid int, config interface{}) error {
 	file, err := instance.Add(name, true)
@@ -41,7 +47,21 @@ func AddInstanceFile(name, image string, pid int, config interface{}) error {
 	file.Pid = pid
 	file.Image = image
 	file.PPid = os.Getpid()
-	return file.Update()
+	err = file.Update()
+	if err != nil {
+		return fmt.Errorf("could not write instance file: %v", err)
+	}
+
+	infoPath, err := pathToInfoDir(name)
+	if err != nil {
+		return err
+	}
+	fileName := filepath.Base(file.Path)
+	err = os.Symlink(file.Path, filepath.Join(infoPath, fileName))
+	if err != nil {
+		return fmt.Errorf("coudl not symlink instance file: %v", err)
+	}
+	return nil
 }
 
 // GetInstance is a wrapper for getting instance file. When no instance file
@@ -56,20 +76,40 @@ func GetInstance(name string) (*instance.File, error) {
 	return inst, nil
 }
 
-// AddExitStatusFile checks that instance file still exists and writes file
-// <name>.status nearby with passed status inside.
+// AddExitStatusFile checks that instance file still exists and writes file with
+// exit status in info directory.
 func AddExitStatusFile(name string, status syscall.WaitStatus) error {
-	inst, err := GetInstance(name)
+	payload := fmt.Sprintf("%d", status.ExitStatus())
+	return addInfoFile(name, StatusFile, []byte(payload))
+}
+
+func addInfoFile(name, kind string, info []byte) error {
+	if info[len(info)-1] != '\n' {
+		info = append(info, '\n')
+	}
+	_, err := GetInstance(name)
 	if err != nil {
 		return fmt.Errorf("could not fetch instance: %v", err)
 	}
-	instDir := filepath.Dir(inst.Path)
-	statusPath := filepath.Join(instDir, name+".status")
-
-	payload := fmt.Sprintf("%d\n", status.ExitStatus())
-	err = ioutil.WriteFile(statusPath, []byte(payload), 0644)
+	path, err := pathToInfoDir(name)
 	if err != nil {
-		return fmt.Errorf("could not write exit status file: %v", err)
+		return err
+	}
+	err = ioutil.WriteFile(filepath.Join(path, kind), info, 0644)
+	if err != nil {
+		return fmt.Errorf("could not write %s info file: %v", kind, err)
 	}
 	return nil
+}
+
+func pathToInfoDir(name string) (string, error) {
+	path := filepath.Join(InfoStoragePath, name)
+
+	oldumask := syscall.Umask(0)
+	defer syscall.Umask(oldumask)
+
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return "", fmt.Errorf("could not create info storage path: %v", err)
+	}
+	return path, nil
 }
