@@ -117,6 +117,9 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 
 	if status.Signaled() {
 		sylog.Debugf("Child exited due to signal %d", status.Signal())
+		if os.Getppid() == ppid {
+			syscall.Kill(ppid, syscall.SIGUSR2)
+		}
 		syscall.Kill(syscall.Gettid(), syscall.SIGKILL)
 	} else if status.Exited() {
 		sylog.Debugf("Child exited with exit status %d", status.ExitStatus())

@@ -7,12 +7,13 @@ import (
 	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
+	"github.com/sylabs/singularity/src/runtime/engines/kube"
 )
 
 // PostStartProcess is called in smaster after successful execution of container process.
 // Since container is run as instance PostStartProcess creates instance file on host fs.
 func (e *EngineOperations) PostStartProcess(pid int) error {
-	sylog.Debugf("container %q is running", e.containerName)
+	sylog.Debugf("container %q is running or exited", e.containerName)
 	return nil
 }
 
@@ -33,12 +34,12 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 		case syscall.SIGCHLD:
 			var status syscall.WaitStatus
 			wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil)
-			sylog.Debugf("wait4 returned: %d %v", wpid, err)
 			if err != nil {
-				return status, fmt.Errorf("error while waiting child: %s", err)
+				return 0, fmt.Errorf("error while waiting child: %s", err)
 			}
 			if wpid == pid {
-				return status, nil
+				err = kube.AddExitStatusFile(e.containerName, status)
+				return status, err
 			}
 		default:
 			return 0, fmt.Errorf("interrupted by signal %s", s.String())

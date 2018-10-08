@@ -3,8 +3,11 @@ package kube
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
@@ -51,4 +54,22 @@ func GetInstance(name string) (*instance.File, error) {
 		}
 	}
 	return inst, nil
+}
+
+// AddExitStatusFile checks that instance file still exists and writes file
+// <name>.status nearby with passed status inside.
+func AddExitStatusFile(name string, status syscall.WaitStatus) error {
+	inst, err := GetInstance(name)
+	if err != nil {
+		return fmt.Errorf("could not fetch instance: %v", err)
+	}
+	instDir := filepath.Dir(inst.Path)
+	statusPath := filepath.Join(instDir, name+".status")
+
+	payload := fmt.Sprintf("%d\n", status.ExitStatus())
+	err = ioutil.WriteFile(statusPath, []byte(payload), 0644)
+	if err != nil {
+		return fmt.Errorf("could not write exit status file: %v", err)
+	}
+	return nil
 }

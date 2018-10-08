@@ -33,7 +33,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	}
 	var (
 		imagePath     = e.containerConfig.GetImage().GetImage()
-		containerPath = filepath.Join(buildcfg.SESSIONDIR, e.containerName)
+		containerPath = buildcfg.SESSIONDIR
 		lowerPath     = filepath.Join(containerPath, "lower")
 		upperPath     = filepath.Join(containerPath, "upper")
 		workPath      = filepath.Join(containerPath, "work")
@@ -54,7 +54,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not mount image: %v", err)
 	}
-	err = prepareBinds(rpcOps, upperPath, e.containerConfig.GetMounts())
+	err = createBindDirs(rpcOps, upperPath, e.containerConfig.GetMounts())
 	if err != nil {
 		return fmt.Errorf("could not mount binds: %v", err)
 	}
@@ -145,7 +145,6 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 	if err != nil {
 		return err
 	}
-	var mountType string
 	if fstype != sif.FsSquash {
 		return fmt.Errorf("unsuported image fs type: %v", fstype)
 	}
@@ -171,15 +170,15 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 		return fmt.Errorf("could not make lowerdir for overlay: %v", err)
 	}
 
-	sylog.Debugf("mounting loop device #%d into %s", dev, imagePath)
-	_, err = rpcOps.Mount(fmt.Sprintf("/dev/loop%d", dev), targetPath, mountType, syscall.MS_NOSUID|syscall.MS_REC, "")
+	sylog.Debugf("mounting loop device #%d into %s", dev, targetPath)
+	_, err = rpcOps.Mount(fmt.Sprintf("/dev/loop%d", dev), targetPath, "squashfs", syscall.MS_NOSUID|syscall.MS_REC, "")
 	if err != nil {
 		return fmt.Errorf("could not mount loop device: %v", err)
 	}
 	return nil
 }
 
-func prepareBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
+func createBindDirs(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
 	for _, mount := range mounts {
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
 		sylog.Debugf("creating %s", target)
