@@ -26,6 +26,11 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		Name:   e.CommonConfig.EngineName,
 	}
 
+	sylog.Debugf("setting mount propagation to SLAVE")
+	_, err := rpcOps.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
+	if err != nil {
+		return fmt.Errorf("could not set RPC mount propagation flag to SLAVE: %v", err)
+	}
 	var (
 		imagePath     = e.containerConfig.GetImage().GetImage()
 		containerPath = filepath.Join(buildcfg.SESSIONDIR, e.containerName)
@@ -34,7 +39,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		workPath      = filepath.Join(containerPath, "work")
 		chrootPath    = filepath.Join(containerPath, "root")
 	)
-	_, err := rpcOps.Mkdir(containerPath, os.ModePerm)
+	_, err = rpcOps.Mkdir(containerPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not create directory for container: %v", err)
 	}
@@ -95,10 +100,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		}
 	}
 
-	_, err = rpcOps.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
-	if err != nil {
-		return fmt.Errorf("could not set RPC mount propagation flag to SLAVE: %v", err)
-	}
 	_, err = rpcOps.Chroot(chrootPath)
 	if err != nil {
 		return fmt.Errorf("could not chroot: %v", err)

@@ -2,7 +2,6 @@ package container
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -15,27 +14,16 @@ import (
 
 // StartProcess starts container.
 func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
-	const envDir = "/.singularity.d/env"
-	const runscript = "/.singularity.d/runscript"
+	const (
+		runScript  = "/.singularity.d/runscript"
+		execScript = "/.singularity.d/actions/exec"
+	)
 
 	if e.containerConfig.WorkingDir != "" {
 		sylog.Debugf("changing working directory to %q", e.containerConfig.WorkingDir)
 		err := os.Chdir(e.containerConfig.WorkingDir)
 		if err != nil {
 			return fmt.Errorf("could not set working directory: %v", err)
-		}
-	}
-
-	fii, err := ioutil.ReadDir(envDir)
-	if err != nil {
-		return fmt.Errorf("could not read %s: %v\n", envDir, err)
-	}
-	for _, fi := range fii {
-		path := filepath.Join(envDir, fi.Name())
-		out, err := exec.Command("/bin/sh", path).CombinedOutput()
-		sylog.Debugf("%s", out)
-		if err != nil {
-			return fmt.Errorf("could not exec %q: %v", path, err)
 		}
 	}
 
@@ -48,10 +36,10 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 
 	command := append(e.containerConfig.GetCommand(), e.containerConfig.GetArgs()...)
 	if len(command) == 0 {
-		command = []string{runscript}
+		command = []string{runScript}
 	}
 
-	cmd := exec.Command(command[0], command[1:]...)
+	cmd := exec.Command(execScript, command...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

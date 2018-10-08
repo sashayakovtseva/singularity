@@ -1007,11 +1007,9 @@ __attribute__((constructor)) static void init(void) {
         }
         close(rpc_socket[0]);
 
-        if ( get_nspath(mnt) == NULL ) {
-            /*
-             * fork is a convenient way to apply capabilities and privileges drop
-             * from single thread context before entering in stage 2
-             */
+        if (get_nspath(mnt) == NULL) {
+            // fork is a convenient way to apply capabilities and privileges drop
+            // from single thread context before entering in stage 2
             int process = fork_ns(CLONE_FS|CLONE_FILES);
 
             if ( process == 0 ) {
