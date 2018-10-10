@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/rpc"
-	"os"
 	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
@@ -19,8 +18,8 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
-// CreateContainer creates a pod. This method is called in the same namespaces as target pod and
-// used for proper namespaces initialization.
+// CreateContainer creates a pod. This method is used for proper
+// namespaces initialization before pod is even started.
 func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 	sylog.Debugf("setting up pod %q", e.podName)
 
@@ -60,9 +59,6 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		if err != nil {
 			return fmt.Errorf("could not create temp file: %v", err)
 		}
-		defer func() {
-			sylog.Debugf("removing temp resolv.conf: %v", os.Remove(temp.Name()))
-		}()
 		ioutil.WriteFile(temp.Name(), b.Bytes(), 0644)
 		sylog.Debugf("mounting resolv.conf file")
 		_, err = rpcOps.Mount(temp.Name(), "/etc/resolv.conf", "", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_BIND, "")

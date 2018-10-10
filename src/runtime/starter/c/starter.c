@@ -1012,7 +1012,7 @@ __attribute__((constructor)) static void init(void) {
             // from single thread context before entering in stage 2
             int process = fork_ns(CLONE_FS|CLONE_FILES);
 
-            if ( process == 0 ) {
+            if (process == 0) {
                 singularity_message(VERBOSE, "Spawn RPC server\n");
                 execute = RPC_SERVER;
             } else if (process > 0) {

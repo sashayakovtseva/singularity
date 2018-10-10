@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
@@ -20,9 +21,13 @@ var (
 )
 
 const (
-	InfoStoragePath = "/var/run/singularity/info"
+	infoStoragePath = "/var/run/singularity/info"
 
-	StatusFile = "status"
+	infoFile       = "info"
+	exitStatusFile = "exit"
+	createdFile    = "created"
+	startedFile    = "started"
+	finishedFile   = "finished"
 )
 
 // AddInstanceFile adds instance file with given name.
@@ -35,7 +40,6 @@ func AddInstanceFile(name, image string, pid int, config interface{}) error {
 	if err != nil {
 		return fmt.Errorf("could not marshal config: %v", err)
 	}
-	sylog.Debugf("instance file is %s", file.Path)
 
 	uid := os.Getuid()
 	pw, err := user.GetPwUID(uint32(uid))
@@ -56,11 +60,12 @@ func AddInstanceFile(name, image string, pid int, config interface{}) error {
 	if err != nil {
 		return err
 	}
-	fileName := filepath.Base(file.Path)
-	err = os.Symlink(file.Path, filepath.Join(infoPath, fileName))
+	symlinkPath := filepath.Join(infoPath, infoFile)
+	err = os.Symlink(file.Path, symlinkPath)
 	if err != nil {
 		return fmt.Errorf("coudl not symlink instance file: %v", err)
 	}
+	sylog.Debugf("instance file is %s", symlinkPath)
 	return nil
 }
 
@@ -76,11 +81,61 @@ func GetInstance(name string) (*instance.File, error) {
 	return inst, nil
 }
 
+// CleanupInstance removes all files related to instance with passed name.
+func CleanupInstance(name string) error {
+	pid := os.Getpid()
+	file, err := GetInstance(name)
+	if err == ErrNotFound {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("could not get instance %q: %v", name, err)
+	}
+	if file.PPid != pid {
+		sylog.Debugf("unauthorized cleanup: expected ppid %d, but got %d", file.PPid, pid)
+		return nil
+	}
+	if err := file.Delete(); err != nil {
+		return fmt.Errorf("could not remove instance file: %v", err)
+	}
+
+	infoPath, err := pathToInfoDir(name)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(infoPath)
+	if err != nil {
+		return fmt.Errorf("could not remove info directory: %v", err)
+	}
+	return nil
+}
+
 // AddExitStatusFile checks that instance file still exists and writes file with
-// exit status in info directory.
+// exit status in corresponding info directory.
 func AddExitStatusFile(name string, status syscall.WaitStatus) error {
 	payload := fmt.Sprintf("%d", status.ExitStatus())
-	return addInfoFile(name, StatusFile, []byte(payload))
+	return addInfoFile(name, exitStatusFile, []byte(payload))
+}
+
+// AddCreatedFile checks that instance file still exists and writes file with
+// creation timestamp in nanoseconds in corresponding info directory.
+func AddCreatedFile(name string) error {
+	payload := fmt.Sprintf("%d", time.Now().UnixNano())
+	return addInfoFile(name, createdFile, []byte(payload))
+}
+
+// AddStartedFile checks that instance file still exists and writes file with
+// start timestamp in nanoseconds in corresponding info directory.
+func AddStartedFile(name string) error {
+	payload := fmt.Sprintf("%d", time.Now().UnixNano())
+	return addInfoFile(name, startedFile, []byte(payload))
+}
+
+// AddFinishedFile checks that instance file still exists and writes file with
+// exit timestamp in nanoseconds in corresponding info directory.
+func AddFinishedFile(name string) error {
+	payload := fmt.Sprintf("%d", time.Now().UnixNano())
+	return addInfoFile(name, finishedFile, []byte(payload))
 }
 
 func addInfoFile(name, kind string, info []byte) error {
@@ -103,7 +158,7 @@ func addInfoFile(name, kind string, info []byte) error {
 }
 
 func pathToInfoDir(name string) (string, error) {
-	path := filepath.Join(InfoStoragePath, name)
+	path := filepath.Join(infoStoragePath, name)
 
 	oldumask := syscall.Umask(0)
 	defer syscall.Umask(oldumask)

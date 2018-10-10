@@ -11,22 +11,20 @@ import (
 )
 
 // PostStartProcess is called in smaster after successful execution of container process.
-// Since container is run as instance PostStartProcess creates instance file on host fs.
 func (e *EngineOperations) PostStartProcess(pid int) error {
-	sylog.Debugf("container %q is running or exited", e.containerName)
+	sylog.Debugf("adding %s start timestamp file", e.containerName)
+	err := kube.AddStartedFile(e.containerName)
+	if err != nil {
+		return fmt.Errorf("could not add starter timestamp file")
+	}
 	return nil
 }
 
 // MonitorContainer is responsible for waiting for container process.
 func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error) {
 	sylog.Debugf("monitoring container %q", e.containerName)
-	defer func() {
-		sylog.Debugf("container %q has exited", e.containerName)
-	}()
-
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals)
-
 	for {
 		s := <-signals
 		sylog.Debugf("received signal: %v", s)
@@ -37,10 +35,14 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 			if err != nil {
 				return 0, fmt.Errorf("error while waiting child: %s", err)
 			}
-			if wpid == pid {
-				err = kube.AddExitStatusFile(e.containerName, status)
-				return status, err
+			if wpid != pid {
+				continue
 			}
+			if err := kube.AddFinishedFile(e.containerName); err != nil {
+				return 0, fmt.Errorf("could not add finished timestamp file: %v", err)
+			}
+			err = kube.AddExitStatusFile(e.containerName, status)
+			return status, err
 		default:
 			return 0, fmt.Errorf("interrupted by signal %s", s.String())
 		}

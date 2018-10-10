@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sylabs/singularity/src/pkg/instance"
@@ -17,9 +18,17 @@ import (
 // Name of the engine.
 const Name = "kube_container"
 
+// Config is a config used to create container.
+type Config struct {
+	CreateContainerRequest *v1alpha2.CreateContainerRequest
+	FifoPath               string
+	FifoFD                 uintptr
+}
+
 // EngineOperations implements the engines.EngineOperations interface for the pod management process.
 type EngineOperations struct {
 	CommonConfig           *config.Common
+	config                 *Config
 	createContainerRequest *v1alpha2.CreateContainerRequest
 	containerName          string
 	security               *v1alpha2.LinuxContainerSecurityContext
@@ -31,7 +40,8 @@ type EngineOperations struct {
 func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	sylog.Debugf("%+v", cfg)
 	e.CommonConfig = cfg
-	e.createContainerRequest = cfg.EngineConfig.(*v1alpha2.CreateContainerRequest)
+	e.config = cfg.EngineConfig.(*Config)
+	e.createContainerRequest = e.config.CreateContainerRequest
 	e.containerConfig = e.createContainerRequest.GetConfig()
 	meta := e.containerConfig.GetMetadata()
 	e.containerName = fmt.Sprintf("%s_%s_%d", e.createContainerRequest.GetPodSandboxId(), meta.GetName(), meta.GetAttempt())
@@ -41,7 +51,7 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 
 // Config returns empty CreateContainerRequest that will be filled later with received JSON data.
 func (e *EngineOperations) Config() interface{} {
-	return new(v1alpha2.CreateContainerRequest)
+	return new(Config)
 }
 
 // PrepareConfig is called in stage1 to validate and prepare container configuration.
@@ -49,6 +59,15 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	sylog.Debugf("preparing config for container %q", e.containerName)
 	conf.SetInstance(true)
 	conf.SetMountPropagation("shared")
+
+	if e.config.FifoPath != "" {
+		sylog.Debugf("opening fifo file %s", e.config.FifoPath)
+		fifo, err := os.OpenFile(e.config.FifoPath, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+		if err != nil {
+			return fmt.Errorf("could not open fifo: %v", err)
+		}
+		e.config.FifoFD = fifo.Fd()
+	}
 
 	podInst, err := instance.Get(e.createContainerRequest.GetPodSandboxId())
 	if err != nil {

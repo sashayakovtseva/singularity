@@ -18,16 +18,16 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
 	}
+	err = kube.AddStartedFile(e.podName)
+	if err != nil {
+		return fmt.Errorf("could not add started timestamp file: %v", err)
+	}
 	return nil
 }
 
 // MonitorContainer is responsible for waiting for pod process.
 func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error) {
 	sylog.Debugf("monitoring pod %q", e.podName)
-	defer func() {
-		sylog.Debugf("pod %q has exited", e.podName)
-	}()
-
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals)
 	for {
@@ -36,9 +36,11 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 		switch s {
 		case syscall.SIGCHLD:
 			var status syscall.WaitStatus
-			if wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil); err != nil {
+			wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil)
+			if err != nil {
 				return status, fmt.Errorf("error while waiting child: %s", err)
-			} else if wpid != pid {
+			}
+			if wpid != pid {
 				continue
 			}
 			return status, nil
@@ -53,20 +55,5 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 // only removes instance file from host fs.
 func (e *EngineOperations) CleanupContainer() error {
 	sylog.Debugf("removing instance file for pod %q", e.podName)
-	pid := os.Getpid()
-	file, err := kube.GetInstance(e.podName)
-	if err == kube.ErrNotFound {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("could not get instance %q: %v", e.podName, err)
-	}
-	if file.PPid != pid {
-		sylog.Debugf("cleanup container is called from fake parent! expected %d, but got %d", file.PPid, pid)
-		return nil
-	}
-	if err := file.Delete(); err != nil {
-		return fmt.Errorf("could not remove instance file: %v", err)
-	}
-	return nil
+	return kube.CleanupInstance(e.podName)
 }

@@ -46,6 +46,8 @@ func (e *EngineOperations) Config() interface{} {
 }
 
 // PrepareConfig is called in stage1 to validate and prepare container configuration.
+// This method figures out which namespaces are necessary for pod and requests them
+// from C part of starter setting conf fields appropriately.
 func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error {
 	sylog.Debugf("preparing config for pod %q", e.podName)
 	conf.SetInstance(true)

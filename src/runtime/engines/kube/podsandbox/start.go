@@ -6,7 +6,6 @@
 package podsandbox
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -42,23 +41,9 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		s := <-signals
 		sylog.Debugf("received signal: %v", s)
 		switch s {
-		case syscall.SIGCHLD:
-			var status syscall.WaitStatus
-			for {
-				wpid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
-				if wpid <= 0 || err != nil {
-					break
-				}
-			}
-		case syscall.SIGCONT:
 		case syscall.SIGTERM:
 			sylog.Debugf("pod %q was asked to terminate", e.podName)
 			os.Exit(0)
-		default:
-			err := syscall.Kill(0, s.(syscall.Signal))
-			if err != nil {
-				return fmt.Errorf("could not kill self: %v", err)
-			}
 		}
 	}
 }

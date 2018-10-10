@@ -114,11 +114,9 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
 	}
-
-	sylog.Debugf("stopping container %q", e.containerName)
-	err = syscall.Kill(containerPID, syscall.SIGSTOP)
+	err = kube.AddCreatedFile(e.containerName)
 	if err != nil {
-		return fmt.Errorf("could not send stop signal to container: %v", err)
+		return fmt.Errorf("could not add created timestamp file: %v", err)
 	}
 
 	err = rpcConn.Close()
