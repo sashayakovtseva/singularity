@@ -121,16 +121,11 @@ func GetInfo(name string) (*Info, error) {
 
 // CleanupInstance removes all files related to instance with passed name.
 func CleanupInstance(name string) error {
-	pid := os.Getpid()
 	file, err := GetInstance(name)
 	if err != nil && err != ErrNotFound {
 		return fmt.Errorf("could not get instance %q: %v", name, err)
 	}
 	if err == nil {
-		if file.PPid != pid {
-			sylog.Debugf("unauthorized cleanup: expected ppid %d, but got %d", file.PPid, pid)
-			return nil
-		}
 		if err := file.Delete(); err != nil {
 			return fmt.Errorf("could not remove instance file: %v", err)
 		}
