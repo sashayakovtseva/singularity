@@ -14,13 +14,14 @@ import (
 	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
+	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
 	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // CreateContainer creates a pod. This method is used for proper
 // namespaces initialization before pod is even started.
-func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
+func (e *EngineOperations) CreateContainer(podPID int, rpcConn net.Conn) error {
 	sylog.Debugf("setting up pod %q", e.podName)
 
 	rpcOps := &client.RPC{
@@ -65,6 +66,15 @@ func (e *EngineOperations) CreateContainer(_ int, rpcConn net.Conn) error {
 		if err != nil {
 			return fmt.Errorf("could not mount resolv.conf: %s", err)
 		}
+	}
+
+	err := kube.AddInstanceFile(e.podName, "", podPID, e.CommonConfig)
+	if err != nil {
+		return fmt.Errorf("could not add instance file: %v", err)
+	}
+	err = kube.AddCreatedFile(e.podName)
+	if err != nil {
+		return fmt.Errorf("could not add created timestamp file: %v", err)
 	}
 
 	return nil

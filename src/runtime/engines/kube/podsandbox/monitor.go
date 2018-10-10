@@ -14,11 +14,7 @@ import (
 // Since pod is run as instance PostStartProcess creates instance file on host fs.
 func (e *EngineOperations) PostStartProcess(pid int) error {
 	sylog.Debugf("pod %q is running", e.podName)
-	err := kube.AddInstanceFile(e.podName, "", pid, e.CommonConfig)
-	if err != nil {
-		return fmt.Errorf("could not add instance file: %v", err)
-	}
-	err = kube.AddStartedFile(e.podName)
+	err := kube.AddStartedFile(e.podName)
 	if err != nil {
 		return fmt.Errorf("could not add started timestamp file: %v", err)
 	}
@@ -38,12 +34,16 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 			var status syscall.WaitStatus
 			wpid, err := syscall.Wait4(pid, &status, syscall.WNOHANG, nil)
 			if err != nil {
-				return status, fmt.Errorf("error while waiting child: %s", err)
+				return 0, fmt.Errorf("error while waiting child: %s", err)
 			}
 			if wpid != pid {
 				continue
 			}
-			return status, nil
+			if err := kube.AddFinishedFile(e.podName); err != nil {
+				return 0, fmt.Errorf("could not add finished timestamp file: %v", err)
+			}
+			err = kube.AddExitCodeFile(e.podName, status)
+			return status, err
 		default:
 			return 0, fmt.Errorf("interrupted by signal %s", s.String())
 		}
@@ -54,6 +54,5 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 // It is responsible for ensuring that the pod is indeed removed. Currently it
 // only removes instance file from host fs.
 func (e *EngineOperations) CleanupContainer() error {
-	sylog.Debugf("removing instance file for pod %q", e.podName)
-	return kube.CleanupInstance(e.podName)
+	return nil
 }
