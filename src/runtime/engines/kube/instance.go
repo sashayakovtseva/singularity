@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"bytes"
+
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/pkg/util/user"
@@ -97,52 +99,23 @@ func GetInfo(name string) (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var i Info
-	created, err := ioutil.ReadFile(filepath.Join(path, createdFile))
-	if err != nil && !os.IsNotExist(err) {
+	i.CreatedAt, err = readInt64FromFile(filepath.Join(path, createdFile))
+	if err != nil {
 		return nil, err
 	}
-	if len(created) != 0 {
-		i.CreatedAt, err = strconv.ParseInt(string(created), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid timestamp: %v", err)
-		}
-	}
-
-	started, err := ioutil.ReadFile(filepath.Join(path, startedFile))
-	if err != nil && !os.IsNotExist(err) {
+	i.StartedAt, err = readInt64FromFile(filepath.Join(path, startedFile))
+	if err != nil {
 		return nil, err
 	}
-	if len(started) != 0 {
-		i.StartedAt, err = strconv.ParseInt(string(started), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid timestamp: %v", err)
-		}
-	}
-
-	finished, err := ioutil.ReadFile(filepath.Join(path, finishedFile))
-	if err != nil && !os.IsNotExist(err) {
+	i.FinishedAt, err = readInt64FromFile(filepath.Join(path, finishedFile))
+	if err != nil {
 		return nil, err
 	}
-	if len(finished) != 0 {
-		i.FinishedAt, err = strconv.ParseInt(string(finished), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid timestamp: %v", err)
-		}
-	}
-
-	exitCode, err := ioutil.ReadFile(filepath.Join(path, exitCodeFile))
-	if err != nil && !os.IsNotExist(err) {
+	i.ExitCode, err = readInt64FromFile(filepath.Join(path, exitCodeFile))
+	if err != nil {
 		return nil, err
 	}
-	if len(exitCode) != 0 {
-		i.ExitCode, err = strconv.ParseInt(string(exitCode), 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("invalid exit code: %v", err)
-		}
-	}
-
 	return &i, nil
 }
 
@@ -231,4 +204,20 @@ func pathToInfoDir(name string) (string, error) {
 		return "", fmt.Errorf("could not create info storage path: %v", err)
 	}
 	return path, nil
+}
+
+func readInt64FromFile(path string) (int64, error) {
+	content, err := ioutil.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, err
+	}
+	content = bytes.TrimSpace(content)
+	if len(content) == 0 {
+		return 0, nil
+	}
+	res, err := strconv.ParseInt(string(content), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid content: %v", err)
+	}
+	return res, nil
 }
