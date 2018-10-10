@@ -142,18 +142,17 @@ func GetInfo(name string) (*Info, error) {
 func CleanupInstance(name string) error {
 	pid := os.Getpid()
 	file, err := GetInstance(name)
-	if err == ErrNotFound {
-		return nil
-	}
-	if err != nil {
+	if err != nil && err != ErrNotFound {
 		return fmt.Errorf("could not get instance %q: %v", name, err)
 	}
-	if file.PPid != pid {
-		sylog.Debugf("unauthorized cleanup: expected ppid %d, but got %d", file.PPid, pid)
-		return nil
-	}
-	if err := file.Delete(); err != nil {
-		return fmt.Errorf("could not remove instance file: %v", err)
+	if err == nil {
+		if file.PPid != pid {
+			sylog.Debugf("unauthorized cleanup: expected ppid %d, but got %d", file.PPid, pid)
+			return nil
+		}
+		if err := file.Delete(); err != nil {
+			return fmt.Errorf("could not remove instance file: %v", err)
+		}
 	}
 
 	infoPath, err := pathToInfoDir(name)
