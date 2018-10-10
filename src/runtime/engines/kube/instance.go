@@ -103,36 +103,44 @@ func GetInfo(name string) (*Info, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	i.CreatedAt, err = strconv.ParseInt(string(created), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp: %v", err)
+	if len(created) != 0 {
+		i.CreatedAt, err = strconv.ParseInt(string(created), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %v", err)
+		}
 	}
 
 	started, err := ioutil.ReadFile(filepath.Join(path, startedFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	i.StartedAt, err = strconv.ParseInt(string(started), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp: %v", err)
+	if len(started) != 0 {
+		i.StartedAt, err = strconv.ParseInt(string(started), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %v", err)
+		}
 	}
 
 	finished, err := ioutil.ReadFile(filepath.Join(path, finishedFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	i.FinishedAt, err = strconv.ParseInt(string(finished), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp: %v", err)
+	if len(finished) != 0 {
+		i.FinishedAt, err = strconv.ParseInt(string(finished), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %v", err)
+		}
 	}
 
 	exitCode, err := ioutil.ReadFile(filepath.Join(path, exitCodeFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	i.ExitCode, err = strconv.ParseInt(string(exitCode), 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("invalid exit code: %v", err)
+	if len(exitCode) != 0 {
+		i.ExitCode, err = strconv.ParseInt(string(exitCode), 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid exit code: %v", err)
+		}
 	}
 
 	return &i, nil
