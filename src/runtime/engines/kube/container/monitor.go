@@ -41,7 +41,7 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 			if err := kube.AddFinishedFile(e.containerName); err != nil {
 				return 0, fmt.Errorf("could not add finished timestamp file: %v", err)
 			}
-			err = kube.AddExitStatusFile(e.containerName, status)
+			err = kube.AddExitCodeFile(e.containerName, status)
 			return status, err
 		default:
 			return 0, fmt.Errorf("interrupted by signal %s", s.String())

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -23,12 +24,20 @@ var (
 const (
 	infoStoragePath = "/var/run/singularity/info"
 
-	infoFile       = "info"
-	exitStatusFile = "exit"
-	createdFile    = "created"
-	startedFile    = "started"
-	finishedFile   = "finished"
+	infoFile     = "info"
+	exitCodeFile = "exit"
+	createdFile  = "created"
+	startedFile  = "started"
+	finishedFile = "finished"
 )
+
+// Info holds info about container's status.
+type Info struct {
+	CreatedAt  int64
+	StartedAt  int64
+	FinishedAt int64
+	ExitCode   int64
+}
 
 // AddInstanceFile adds instance file with given name.
 func AddInstanceFile(name, image string, pid int, config interface{}) error {
@@ -81,6 +90,54 @@ func GetInstance(name string) (*instance.File, error) {
 	return inst, nil
 }
 
+// GetInfo reads all info files from dedicated directory and returns
+// its contents in a convenient form of a struct.
+func GetInfo(name string) (*Info, error) {
+	path, err := pathToInfoDir(name)
+	if err != nil {
+		return nil, err
+	}
+
+	var i Info
+	created, err := ioutil.ReadFile(filepath.Join(path, createdFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	i.CreatedAt, err = strconv.ParseInt(string(created), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid timestamp: %v", err)
+	}
+
+	started, err := ioutil.ReadFile(filepath.Join(path, startedFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	i.StartedAt, err = strconv.ParseInt(string(started), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid timestamp: %v", err)
+	}
+
+	finished, err := ioutil.ReadFile(filepath.Join(path, finishedFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	i.FinishedAt, err = strconv.ParseInt(string(finished), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid timestamp: %v", err)
+	}
+
+	exitCode, err := ioutil.ReadFile(filepath.Join(path, exitCodeFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	i.ExitCode, err = strconv.ParseInt(string(exitCode), 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid exit code: %v", err)
+	}
+
+	return &i, nil
+}
+
 // CleanupInstance removes all files related to instance with passed name.
 func CleanupInstance(name string) error {
 	pid := os.Getpid()
@@ -110,11 +167,11 @@ func CleanupInstance(name string) error {
 	return nil
 }
 
-// AddExitStatusFile checks that instance file still exists and writes file with
+// AddExitCodeFile checks that instance file still exists and writes file with
 // exit status in corresponding info directory.
-func AddExitStatusFile(name string, status syscall.WaitStatus) error {
+func AddExitCodeFile(name string, status syscall.WaitStatus) error {
 	payload := fmt.Sprintf("%d", status.ExitStatus())
-	return addInfoFile(name, exitStatusFile, []byte(payload))
+	return addInfoFile(name, exitCodeFile, []byte(payload))
 }
 
 // AddCreatedFile checks that instance file still exists and writes file with
