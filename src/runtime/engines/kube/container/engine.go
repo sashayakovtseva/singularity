@@ -12,7 +12,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/config"
 	"github.com/sylabs/singularity/src/runtime/engines/config/starter"
-	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // Name of the engine.
@@ -20,7 +20,7 @@ const Name = "kube_container"
 
 // Config is a config used to create container.
 type Config struct {
-	CreateContainerRequest *v1alpha2.CreateContainerRequest
+	CreateContainerRequest *k8s.CreateContainerRequest
 	FifoPath               string
 	FifoFD                 uintptr
 }
@@ -29,11 +29,11 @@ type Config struct {
 type EngineOperations struct {
 	CommonConfig           *config.Common
 	config                 *Config
-	createContainerRequest *v1alpha2.CreateContainerRequest
+	createContainerRequest *k8s.CreateContainerRequest
 	containerName          string
-	security               *v1alpha2.LinuxContainerSecurityContext
-	containerConfig        *v1alpha2.ContainerConfig
-	podConfig              *v1alpha2.PodSandboxConfig
+	security               *k8s.LinuxContainerSecurityContext
+	containerConfig        *k8s.ContainerConfig
+	podConfig              *k8s.PodSandboxConfig
 }
 
 // InitConfig simply saves passed config into engine. Passed cfg already includes parsed ContainerConfig.
@@ -96,12 +96,12 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 
 	conf.SetNoNewPrivs(e.security.GetNoNewPrivs())
 	switch e.security.GetNamespaceOptions().GetIpc() {
-	case v1alpha2.NamespaceMode_CONTAINER:
+	case k8s.NamespaceMode_CONTAINER:
 		sylog.Debugf("requesting IPC namespace")
 		createNs = append(joinNs, specs.LinuxNamespace{
 			Type: specs.IPCNamespace,
 		})
-	case v1alpha2.NamespaceMode_POD:
+	case k8s.NamespaceMode_POD:
 		sylog.Debugf("joining pod's IPC namespace")
 		joinNs = append(joinNs, specs.LinuxNamespace{
 			Type: specs.IPCNamespace,
@@ -110,12 +110,12 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	}
 
 	switch e.security.GetNamespaceOptions().GetNetwork() {
-	case v1alpha2.NamespaceMode_CONTAINER:
+	case k8s.NamespaceMode_CONTAINER:
 		sylog.Debugf("requesting NET namespace")
 		createNs = append(joinNs, specs.LinuxNamespace{
 			Type: specs.NetworkNamespace,
 		})
-	case v1alpha2.NamespaceMode_POD:
+	case k8s.NamespaceMode_POD:
 		sylog.Debugf("joining pod's NET namespace")
 		joinNs = append(joinNs, specs.LinuxNamespace{
 			Type: specs.NetworkNamespace,

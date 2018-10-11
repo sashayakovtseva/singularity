@@ -14,7 +14,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/config"
 	"github.com/sylabs/singularity/src/runtime/engines/config/starter"
-	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // Name of the engine.
@@ -23,17 +23,17 @@ const Name = "kube_podsandbox"
 // EngineOperations implements the engines.EngineOperations interface for the pod management process.
 type EngineOperations struct {
 	CommonConfig *config.Common
-	podConfig    *v1alpha2.PodSandboxConfig
+	podConfig    *k8s.PodSandboxConfig
 	// name of the pod constructed from metadata. Instance file will be written under this name.
 	podName  string
-	security *v1alpha2.LinuxSandboxSecurityContext
+	security *k8s.LinuxSandboxSecurityContext
 }
 
 // InitConfig simply saves passed config into engine. Passed cfg already includes parsed PodSandboxConfig.
 func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	sylog.Debugf("%+v", cfg)
 	e.CommonConfig = cfg
-	e.podConfig = cfg.EngineConfig.(*v1alpha2.PodSandboxConfig)
+	e.podConfig = cfg.EngineConfig.(*k8s.PodSandboxConfig)
 	meta := e.podConfig.GetMetadata()
 	e.podName = fmt.Sprintf("%s_%s_%s_%d", meta.GetName(), meta.GetNamespace(), meta.GetUid(), meta.GetAttempt())
 	e.security = e.podConfig.GetLinux().GetSecurityContext()
@@ -42,7 +42,7 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 
 // Config returns empty PodSandboxConfig that will be filled later with received JSON data.
 func (e *EngineOperations) Config() interface{} {
-	return new(v1alpha2.PodSandboxConfig)
+	return new(k8s.PodSandboxConfig)
 }
 
 // PrepareConfig is called in stage1 to validate and prepare container configuration.
@@ -65,19 +65,19 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		})
 	}
 
-	if e.security.GetNamespaceOptions().GetNetwork() == v1alpha2.NamespaceMode_POD {
+	if e.security.GetNamespaceOptions().GetNetwork() == k8s.NamespaceMode_POD {
 		sylog.Debugf("requesting NET namespace")
 		namespaces = append(namespaces, specs.LinuxNamespace{
 			Type: specs.NetworkNamespace,
 		})
 	}
-	if e.security.GetNamespaceOptions().GetPid() == v1alpha2.NamespaceMode_POD {
+	if e.security.GetNamespaceOptions().GetPid() == k8s.NamespaceMode_POD {
 		sylog.Debugf("requesting PID namespace")
 		namespaces = append(namespaces, specs.LinuxNamespace{
 			Type: specs.PIDNamespace,
 		})
 	}
-	if e.security.GetNamespaceOptions().GetIpc() == v1alpha2.NamespaceMode_POD {
+	if e.security.GetNamespaceOptions().GetIpc() == k8s.NamespaceMode_POD {
 		sylog.Debugf("requesting IPC namespace")
 		namespaces = append(namespaces, specs.LinuxNamespace{
 			Type: specs.IPCNamespace,

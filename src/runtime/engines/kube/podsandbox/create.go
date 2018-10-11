@@ -16,7 +16,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
-	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // CreateContainer creates a pod. This method is used for proper
@@ -36,7 +36,7 @@ func (e *EngineOperations) CreateContainer(podPID int, rpcConn net.Conn) error {
 		}
 	}
 
-	if e.security.GetNamespaceOptions().GetPid() == v1alpha2.NamespaceMode_POD {
+	if e.security.GetNamespaceOptions().GetPid() == k8s.NamespaceMode_POD {
 		sylog.Debugf("mounting proc fs")
 		_, err := rpcOps.Mount("proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV, "")
 		if err != nil {

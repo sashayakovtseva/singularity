@@ -14,7 +14,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/util/loop"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	"github.com/sylabs/singularity/src/runtime/engines/singularity/rpc/client"
-	"k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // CreateContainer creates a container. This method is called in the same
@@ -176,7 +176,7 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 	return nil
 }
 
-func createBindDirs(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
+func createBindDirs(rpcOps *client.RPC, targetRoot string, mounts []*k8s.Mount) error {
 	for _, mount := range mounts {
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
 		sylog.Debugf("creating %s", target)
@@ -188,7 +188,7 @@ func createBindDirs(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mo
 	return nil
 }
 
-func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount) error {
+func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*k8s.Mount) error {
 	for _, mount := range mounts {
 		source := mount.GetHostPath()
 		mi, err := os.Lstat(source)
@@ -204,18 +204,29 @@ func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount)
 
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
 
-		flags := syscall.MS_BIND | syscall.MS_REC
+		var flags uintptr = syscall.MS_BIND | syscall.MS_REC
+		if mount.GetReadonly() {
+			flags |= syscall.MS_RDONLY
+		}
 		sylog.Debugf("mounting %s to %s", source, target)
-		_, err = rpcOps.Mount(source, target, "", uintptr(flags), "")
+		_, err = rpcOps.Mount(source, target, "", flags, "")
 		if err != nil {
 			return fmt.Errorf("could not bind mount: %v", err)
 		}
 
+		if mount.GetReadonly() {
+			sylog.Debugf("remounting due to readonly flag for %s", target)
+			_, err = rpcOps.Mount("", target, "", flags|syscall.MS_REMOUNT, "")
+			if err != nil {
+				return fmt.Errorf("could not remount: %v", err)
+			}
+		}
+
 		propagation := syscall.MS_PRIVATE
 		switch mount.GetPropagation() {
-		case v1alpha2.MountPropagation_PROPAGATION_HOST_TO_CONTAINER:
+		case k8s.MountPropagation_PROPAGATION_HOST_TO_CONTAINER:
 			propagation = syscall.MS_SLAVE
-		case v1alpha2.MountPropagation_PROPAGATION_BIDIRECTIONAL:
+		case k8s.MountPropagation_PROPAGATION_BIDIRECTIONAL:
 			propagation = syscall.MS_SHARED
 		}
 		sylog.Debugf("setting %s propagation to %s", target, mount.GetPropagation())
@@ -223,15 +234,6 @@ func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount)
 		if err != nil {
 			return fmt.Errorf("could not set mount propagation: %v", err)
 		}
-
-		if mount.GetReadonly() {
-			sylog.Debugf("setting a readonly flag for %s", target)
-			_, err = rpcOps.Mount("", target, "", syscall.MS_REMOUNT|syscall.O_RDONLY, "")
-			if err != nil {
-				return fmt.Errorf("could not set mount propagation: %v", err)
-			}
-		}
-
 	}
 	return nil
 }
