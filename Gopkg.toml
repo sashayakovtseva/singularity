@@ -87,7 +87,7 @@ required = [
 
 [[constraint]]
   name = "k8s.io/kubernetes"
-  version = "1.11.2"
+  version = "~v1.11.2"
 
 [prune]
   go-tests = true
