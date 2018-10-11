@@ -204,24 +204,34 @@ func mountBinds(rpcOps *client.RPC, targetRoot string, mounts []*v1alpha2.Mount)
 
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
 
-		flags := syscall.MS_NOSUID | syscall.MS_BIND | syscall.MS_REC | syscall.MS_NODEV
-		if mount.GetReadonly() {
-			flags |= syscall.MS_RDONLY
-		}
-		switch mount.GetPropagation() {
-		case v1alpha2.MountPropagation_PROPAGATION_PRIVATE:
-			flags |= syscall.MS_PRIVATE
-		case v1alpha2.MountPropagation_PROPAGATION_HOST_TO_CONTAINER:
-			flags |= syscall.MS_SLAVE
-		case v1alpha2.MountPropagation_PROPAGATION_BIDIRECTIONAL:
-			flags |= syscall.MS_SHARED
-		}
-
+		flags := syscall.MS_BIND | syscall.MS_REC
 		sylog.Debugf("mounting %s to %s", source, target)
 		_, err = rpcOps.Mount(source, target, "", uintptr(flags), "")
 		if err != nil {
 			return fmt.Errorf("could not bind mount: %v", err)
 		}
+
+		propagation := syscall.MS_PRIVATE
+		switch mount.GetPropagation() {
+		case v1alpha2.MountPropagation_PROPAGATION_HOST_TO_CONTAINER:
+			propagation = syscall.MS_SLAVE
+		case v1alpha2.MountPropagation_PROPAGATION_BIDIRECTIONAL:
+			propagation = syscall.MS_SHARED
+		}
+		sylog.Debugf("setting %s propagation to %s", target, mount.GetPropagation())
+		_, err = rpcOps.Mount("", target, "", uintptr(propagation), "")
+		if err != nil {
+			return fmt.Errorf("could not set mount propagation: %v", err)
+		}
+
+		if mount.GetReadonly() {
+			sylog.Debugf("setting a readonly flag for %s", target)
+			_, err = rpcOps.Mount("", target, "", syscall.MS_REMOUNT|syscall.O_RDONLY, "")
+			if err != nil {
+				return fmt.Errorf("could not set mount propagation: %v", err)
+			}
+		}
+
 	}
 	return nil
 }
