@@ -126,6 +126,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 
 	if e.config.PipeFD != 0 {
 		pipe := os.NewFile(e.config.PipeFD, "")
+		sylog.Debugf("writing %v to pipe %d", SigCreated, e.config.PipeFD)
 		_, err := pipe.Write([]byte{SigCreated})
 		if err != nil {
 			return fmt.Errorf("could not write pipe: %v", err)
