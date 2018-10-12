@@ -15,7 +15,7 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 	sylog.Debugf("adding %s start timestamp file", e.containerName)
 	err := kube.AddStartedFile(e.containerName)
 	if err != nil {
-		return fmt.Errorf("could not add starter timestamp file")
+		return fmt.Errorf("could not add starter timestamp file: %v", err)
 	}
 	return nil
 }
@@ -52,5 +52,16 @@ func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error)
 // CleanupContainer is called in smaster after the MontiorContainer returns.
 // This method will NOT remove instance file since it is assumed to be done by CRI server.
 func (e *EngineOperations) CleanupContainer() error {
+	if e.config.PipeFD != 0 {
+		pipe := os.NewFile(e.config.PipeFD, "")
+		sylog.Debugf("sending %v to pipe", SigCleanup)
+		_, err := pipe.Write([]byte{SigCleanup})
+		if err != nil {
+			return fmt.Errorf("could not write pipe: %v", err)
+		}
+		if err := pipe.Close(); err != nil {
+			sylog.Errorf("could not close pipe: %v", err)
+		}
+	}
 	return nil
 }

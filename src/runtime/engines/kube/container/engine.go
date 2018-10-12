@@ -15,14 +15,23 @@ import (
 	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
-// Name of the engine.
-const Name = "kube_container"
+const (
+	// Name of the engine.
+	Name = "kube_container"
+
+	// SigCreatedis is used to notify a caller that container was successfully created.
+	SigCreated byte = 1
+
+	// SigCleanup is used to notify a caller that container was cleaned up.
+	SigCleanup byte = 2
+)
 
 // Config is a config used to create container.
 type Config struct {
 	CreateContainerRequest *k8s.CreateContainerRequest
 	FifoPath               string
 	FifoFD                 uintptr
+	PipeFD                 uintptr
 }
 
 // EngineOperations implements the engines.EngineOperations interface for the pod management process.
@@ -140,6 +149,5 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		logs.Close()
 	}
 
-	// todo request UserNamespace?
 	return nil
 }

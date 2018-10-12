@@ -123,6 +123,19 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	if err != nil {
 		return fmt.Errorf("could not close rpc: %v", err)
 	}
+
+	if e.config.PipeFD != 0 {
+		pipe := os.NewFile(e.config.PipeFD, "")
+		_, err := pipe.Write([]byte{SigCreated})
+		if err != nil {
+			return fmt.Errorf("could not write pipe: %v", err)
+		}
+		sylog.Debugf("closing pipe %d", e.config.PipeFD)
+		if err := pipe.Close(); err != nil {
+			sylog.Errorf("could not close pipe: %v", err)
+		}
+	}
+
 	return nil
 }
 
