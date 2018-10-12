@@ -24,7 +24,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		sylog.Debugf("opening fifo fd %d to read byte", e.config.FifoFD)
 		fifo, err := os.OpenFile(fmt.Sprintf("/proc/self/fd/%d", e.config.FifoFD), os.O_RDONLY, 0)
 		if err != nil {
-			return fmt.Errorf("could not reaopen fifo in a blocking mode: %v", err)
+			return fmt.Errorf("could not reopen fifo in a blocking mode: %v", err)
 		}
 		data := make([]byte, 1)
 		sylog.Debugf("reading fifo...")
@@ -32,7 +32,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("could not read fifo: %v", err)
 		}
-		sylog.Debugf("read %q from fifo", data)
+		sylog.Debugf("read %v from fifo", data)
 		err = fifo.Close()
 		if err != nil {
 			return fmt.Errorf("could not close fifo: %v", err)

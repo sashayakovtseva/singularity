@@ -135,6 +135,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 		if err := pipe.Close(); err != nil {
 			sylog.Errorf("could not close pipe: %v", err)
 		}
+		e.config.PipeFD = 0
 	}
 
 	return nil
