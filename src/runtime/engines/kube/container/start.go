@@ -2,7 +2,6 @@ package container
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -22,19 +21,18 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 
 	if e.config.FifoFD != 0 {
 		sylog.Debugf("opening fifo fd %d to read byte", e.config.FifoFD)
-		fifo, err := os.OpenFile(fmt.Sprintf("/proc/self/fd/%d", e.config.FifoFD), os.O_RDONLY, 0)
+		fifo, err := os.OpenFile(fmt.Sprintf("/proc/self/fd/%d", e.config.FifoFD), os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
 		if err != nil {
-			return fmt.Errorf("could not reopen fifo in a blocking mode: %v", err)
+			return fmt.Errorf("could not open fifo: %v", err)
 		}
 		data := make([]byte, 1)
 		sylog.Debugf("reading fifo...")
 		_, err = fifo.Read(data)
-		if err != nil && err != io.EOF {
+		if err != nil {
 			return fmt.Errorf("could not read fifo: %v", err)
 		}
 		sylog.Debugf("read %v from fifo", data)
-		err = fifo.Close()
-		if err != nil {
+		if err = fifo.Close(); err != nil {
 			return fmt.Errorf("could not close fifo: %v", err)
 		}
 	}

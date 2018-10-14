@@ -9,6 +9,7 @@ generate_docs
 
 .vscode
 .idea/
+.DS_store
 
 vendor/
 builddir/
