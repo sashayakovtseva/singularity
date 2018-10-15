@@ -3,7 +3,7 @@ package container
 import (
 	"fmt"
 	"os"
-		"syscall"
+	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
@@ -55,6 +55,12 @@ func (e *EngineOperations) CleanupContainer() error {
 		_, err := pipe.Write([]byte{SigCleanup})
 		if err != nil {
 			return fmt.Errorf("could not write pipe: %v", err)
+		}
+		if e.createError != nil {
+			_, err := pipe.Write([]byte(e.createError.Error()))
+			if err != nil {
+				return fmt.Errorf("could not write reason to pipe: %v", err)
+			}
 		}
 		if err := pipe.Close(); err != nil {
 			sylog.Errorf("could not close pipe: %v", err)

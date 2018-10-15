@@ -19,9 +19,11 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		execScript = "/.singularity.d/actions/exec"
 	)
 
-	if e.config.FifoFD != 0 {
-		sylog.Debugf("opening fifo fd %d to read byte", e.config.FifoFD)
-		fifo, err := os.OpenFile(fmt.Sprintf("/proc/self/fd/%d", e.config.FifoFD), os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	if e.config.FifoPath != "" {
+		fifoFileName := filepath.Base(e.config.FifoPath)
+		path := filepath.Join("/tmp/fifo", fifoFileName)
+		sylog.Debugf("opening fifo %s to read byte", path)
+		fifo, err := os.OpenFile(path, os.O_RDONLY|syscall.O_CLOEXEC, 0)
 		if err != nil {
 			return fmt.Errorf("could not open fifo: %v", err)
 		}

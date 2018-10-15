@@ -19,7 +19,13 @@ import (
 
 // CreateContainer creates a container. This method is called in the same
 // namespaces as target container and used for proper namespaces initialization.
-func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) error {
+func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (err error) {
+	defer func() {
+		if err != nil {
+			e.createError = err
+		}
+	}()
+
 	sylog.Debugf("setting up container %q", e.containerName)
 	rpcOps := &client.RPC{
 		Client: rpc.NewClient(rpcConn),
@@ -27,7 +33,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 	}
 
 	sylog.Debugf("setting mount propagation to SLAVE")
-	_, err := rpcOps.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
+	_, err = rpcOps.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
 	if err != nil {
 		return fmt.Errorf("could not set RPC mount propagation flag to SLAVE: %v", err)
 	}
@@ -99,9 +105,23 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) e
 			return fmt.Errorf("could not create log dir: %v", err)
 		}
 		sylog.Debugf("mounting log directory %q to %q", hostLogDir, contLogDir)
-		_, err = rpcOps.Mount(hostLogDir, contLogDir, "tempfs", syscall.MS_NOSUID|syscall.MS_BIND, "")
+		_, err = rpcOps.Mount(hostLogDir, contLogDir, "", syscall.MS_BIND, "")
 		if err != nil {
 			return fmt.Errorf("could not mount log directory: %v", err)
+		}
+	}
+
+	if e.config.FifoPath != "" {
+		contFifoDir := filepath.Join(chrootPath, "/tmp/fifo")
+		_, err = rpcOps.Mkdir(contFifoDir, 0755)
+		if err != nil {
+			return fmt.Errorf("could not create log dir: %v", err)
+		}
+		hostFifoDir := filepath.Dir(e.config.FifoPath)
+		sylog.Debugf("mounting fifo file %q to %q", hostFifoDir, contFifoDir)
+		_, err = rpcOps.Mount(hostFifoDir, contFifoDir, "", syscall.MS_BIND, "")
+		if err != nil {
+			return fmt.Errorf("could not mount fifo file: %v", err)
 		}
 	}
 

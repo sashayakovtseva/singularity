@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sylabs/singularity/src/pkg/instance"
@@ -19,7 +18,7 @@ const (
 	// Name of the engine.
 	Name = "kube_container"
 
-	// SigCreatedis is used to notify a caller that container was successfully created.
+	// SigCreated is used to notify a caller that container was successfully created.
 	SigCreated byte = 1
 
 	// SigCleanup is used to notify a caller that container was cleaned up.
@@ -30,7 +29,6 @@ const (
 type Config struct {
 	CreateContainerRequest *k8s.CreateContainerRequest
 	FifoPath               string
-	FifoFD                 uintptr
 	PipeFD                 uintptr
 }
 
@@ -43,6 +41,7 @@ type EngineOperations struct {
 	security               *k8s.LinuxContainerSecurityContext
 	containerConfig        *k8s.ContainerConfig
 	podConfig              *k8s.PodSandboxConfig
+	createError            error
 }
 
 // InitConfig simply saves passed config into engine. Passed cfg already includes parsed ContainerConfig.
@@ -53,7 +52,7 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	e.createContainerRequest = e.config.CreateContainerRequest
 	e.containerConfig = e.createContainerRequest.GetConfig()
 	meta := e.containerConfig.GetMetadata()
-	e.containerName = fmt.Sprintf("%s_%s_%d", e.createContainerRequest.GetPodSandboxId(), meta.GetName(), meta.GetAttempt())
+	e.containerName = fmt.Sprintf("%s_%d", meta.GetName(), meta.GetAttempt())
 	e.podConfig = e.createContainerRequest.GetSandboxConfig()
 	e.security = e.containerConfig.GetLinux().GetSecurityContext()
 }
@@ -68,15 +67,6 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	sylog.Debugf("preparing config for container %q", e.containerName)
 	conf.SetInstance(true)
 	conf.SetMountPropagation("shared")
-
-	if e.config.FifoPath != "" {
-		sylog.Debugf("opening fifo file %s", e.config.FifoPath)
-		fifo, err := os.OpenFile(e.config.FifoPath, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
-		if err != nil {
-			return fmt.Errorf("could not open fifo: %v", err)
-		}
-		e.config.FifoFD = fifo.Fd()
-	}
 
 	podInst, err := instance.Get(e.createContainerRequest.GetPodSandboxId())
 	if err != nil {
