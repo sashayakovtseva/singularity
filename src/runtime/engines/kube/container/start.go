@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
+	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 // StartProcess starts container.
@@ -67,8 +68,9 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 			return fmt.Errorf("could not open log file %q: %v", path, err)
 		}
 		defer out.Close()
-		cmd.Stderr = out
-		cmd.Stdout = out
+
+		cmd.Stderr = &rfc3339NanoWriter{Writer: out, stream: k8s.Stderr}
+		cmd.Stdout = &rfc3339NanoWriter{Writer: out, stream: k8s.Stdout}
 	}
 
 	errChan := make(chan error, 1)
