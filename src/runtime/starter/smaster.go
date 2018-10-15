@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
@@ -95,7 +96,19 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 	}()
 
 	go func() {
-		status, err = engine.MonitorContainer(containerPid)
+		// catch all signals and let default handler for SIGWINCH, SIGCONT, SIGTSTP
+		signals := make(chan os.Signal, 1)
+		handledSignals := make([]os.Signal, 0)
+		for i := 0; i < 256; i++ {
+			sig := syscall.Signal(i)
+			if sig == syscall.SIGWINCH || sig == syscall.SIGCONT || sig == syscall.SIGTSTP {
+				continue
+			}
+			handledSignals = append(handledSignals, sig)
+		}
+		signal.Notify(signals, handledSignals...)
+
+		status, err = engine.MonitorContainer(containerPid, signals)
 		fatalChan <- err
 	}()
 	fatal = <-fatalChan
