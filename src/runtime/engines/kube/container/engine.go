@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"syscall"
-
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
@@ -30,8 +28,7 @@ const (
 // Config is a config used to create container.
 type Config struct {
 	CreateContainerRequest *k8s.CreateContainerRequest
-	Socket                 string
-	SocketFD               uintptr
+	Socket                 int
 }
 
 // EngineOperations implements the engines.EngineOperations interface for the pod management process.
@@ -70,31 +67,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	sylog.Debugf("preparing config for container %q", e.containerName)
 	conf.SetInstance(true)
 	conf.SetMountPropagation("shared")
-
-	if e.config.Socket != "" {
-		conn, err := net.Dial("unix", e.config.Socket)
-		if err != nil {
-			return fmt.Errorf("could not dial socket: %v", err)
-		}
-		socket, err := conn.(*net.UnixConn).File()
-		if err != nil {
-			return fmt.Errorf("could not get socket file: %v", err)
-		}
-		copyFD, err := syscall.Dup(int(socket.Fd()))
-		if err != nil {
-			return fmt.Errorf("could not duplicate descriptor: %v", err)
-		}
-		e.config.SocketFD = uintptr(copyFD)
-		//e.config.SocketFD = socket.Fd()
-		//_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, e.config.SocketFD, syscall.F_SETFD, syscall.O_RDWR)
-		//if errno != 0 {
-		//	return fmt.Errorf("could not clear close-on-exec flag: %v", errno)
-		//}
-		if err := conn.Close(); err != nil {
-			sylog.Errorf("could not close opened socket: %v", err)
-		}
-		syscall.Socketpair()
-	}
+	ll("/proc/self/fd")
 
 	podInst, err := instance.Get(e.createContainerRequest.GetPodSandboxId())
 	if err != nil {

@@ -644,7 +644,7 @@ __attribute__((constructor)) static void init(void) {
     }
 
     singularity_message(DEBUG, "Create socketpair for smaster communication channel\n");
-    if (socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, master_socket) < 0) {
+    if (socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, master_socket) == -1) {
         singularity_message(ERROR, "Failed to create communication socket: %s\n", strerror(errno));
         exit(1);
     }

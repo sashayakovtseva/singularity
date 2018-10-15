@@ -20,24 +20,24 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		execScript = "/.singularity.d/actions/exec"
 	)
 
-	if e.config.SocketFD != 0 {
-		socket := os.NewFile(e.config.SocketFD, "")
-		conn, err := net.FileConn(socket)
+	if e.config.Socket != 0 {
+		comm := os.NewFile(uintptr(e.config.Socket), "")
+		socket, err := net.FileConn(comm)
 		if err != nil {
-			return fmt.Errorf("could not connect to socket: %v", err)
+			return fmt.Errorf("could not create socket connection: %v", err)
 		}
-		if err := socket.Close(); err != nil {
-			sylog.Errorf("could not close socket: %v", err)
+		if err := comm.Close(); err != nil {
+			sylog.Errorf("could not close socket file: %v", err)
 		}
 
 		data := make([]byte, 1)
 		sylog.Debugf("reading socket...")
-		_, err = conn.Read(data)
+		_, err = socket.Read(data)
 		if err != nil {
 			return fmt.Errorf("could not read socket: %v", err)
 		}
 		sylog.Debugf("read %v from socket", data)
-		if err = conn.Close(); err != nil {
+		if err = socket.Close(); err != nil {
 			return fmt.Errorf("could not close socket connection: %v", err)
 		}
 	}

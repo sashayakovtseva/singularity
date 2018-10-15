@@ -23,16 +23,16 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 	defer func() {
 		e.createError = err
 	}()
-	if e.config.SocketFD != 0 {
-		socket := os.NewFile(e.config.SocketFD, "")
-		conn, err := net.FileConn(socket)
+	if e.config.Socket != 0 {
+		comm := os.NewFile(uintptr(e.config.Socket), "")
+		socket, err := net.FileConn(comm)
 		if err != nil {
-			return fmt.Errorf("could not connect to socket: %v", err)
+			return fmt.Errorf("could not create socket connection: %v", err)
 		}
-		if err := socket.Close(); err != nil {
+		if err := comm.Close(); err != nil {
 			sylog.Errorf("could not close socket file: %v", err)
 		}
-		e.conn = conn
+		e.conn = socket
 	}
 
 	sylog.Debugf("setting up container %q", e.containerName)
