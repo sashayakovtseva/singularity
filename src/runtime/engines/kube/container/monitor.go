@@ -3,8 +3,7 @@ package container
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
+		"syscall"
 
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/kube"
@@ -21,10 +20,8 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 }
 
 // MonitorContainer is responsible for waiting for container process.
-func (e *EngineOperations) MonitorContainer(pid int) (syscall.WaitStatus, error) {
+func (e *EngineOperations) MonitorContainer(pid int, signals chan os.Signal) (syscall.WaitStatus, error) {
 	sylog.Debugf("monitoring container %q", e.containerName)
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals)
 	for {
 		s := <-signals
 		sylog.Debugf("received signal: %v", s)
