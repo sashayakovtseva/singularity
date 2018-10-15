@@ -49,21 +49,20 @@ func (e *EngineOperations) MonitorContainer(pid int, signals chan os.Signal) (sy
 // CleanupContainer is called in smaster after the MontiorContainer returns.
 // This method will NOT remove instance file since it is assumed to be done by CRI server.
 func (e *EngineOperations) CleanupContainer() error {
-	if e.config.PipeFD != 0 {
-		pipe := os.NewFile(e.config.PipeFD, "")
-		sylog.Debugf("sending %v to pipe", SigCleanup)
-		_, err := pipe.Write([]byte{SigCleanup})
+	if e.conn != nil {
+		sylog.Debugf("sending %v to socket", SigCleanup)
+		_, err := e.conn.Write([]byte{SigCleanup})
 		if err != nil {
-			return fmt.Errorf("could not write pipe: %v", err)
+			return fmt.Errorf("could not write to socket: %v", err)
 		}
 		if e.createError != nil {
-			_, err := pipe.Write([]byte(e.createError.Error()))
+			_, err := e.conn.Write([]byte(e.createError.Error()))
 			if err != nil {
-				return fmt.Errorf("could not write reason to pipe: %v", err)
+				return fmt.Errorf("could not write reason to pisocketpe: %v", err)
 			}
 		}
-		if err := pipe.Close(); err != nil {
-			sylog.Errorf("could not close pipe: %v", err)
+		if err := e.conn.Close(); err != nil {
+			sylog.Errorf("could not close socket: %v", err)
 		}
 	}
 	return nil

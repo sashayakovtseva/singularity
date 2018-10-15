@@ -21,10 +21,19 @@ import (
 // namespaces as target container and used for proper namespaces initialization.
 func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (err error) {
 	defer func() {
-		if err != nil {
-			e.createError = err
-		}
+		e.createError = err
 	}()
+	if e.config.SocketFD != 0 {
+		socket := os.NewFile(e.config.SocketFD, "")
+		conn, err := net.FileConn(socket)
+		if err != nil {
+			return fmt.Errorf("could not connect to socket: %v", err)
+		}
+		if err := socket.Close(); err != nil {
+			sylog.Errorf("could not close socket file: %v", err)
+		}
+		e.conn = conn
+	}
 
 	sylog.Debugf("setting up container %q", e.containerName)
 	rpcOps := &client.RPC{
@@ -111,20 +120,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 		}
 	}
 
-	if e.config.FifoPath != "" {
-		contFifoDir := filepath.Join(chrootPath, "/tmp/fifo")
-		_, err = rpcOps.Mkdir(contFifoDir, 0755)
-		if err != nil {
-			return fmt.Errorf("could not create log dir: %v", err)
-		}
-		hostFifoDir := filepath.Dir(e.config.FifoPath)
-		sylog.Debugf("mounting fifo file %q to %q", hostFifoDir, contFifoDir)
-		_, err = rpcOps.Mount(hostFifoDir, contFifoDir, "", syscall.MS_BIND, "")
-		if err != nil {
-			return fmt.Errorf("could not mount fifo file: %v", err)
-		}
-	}
-
 	_, err = rpcOps.Chroot(chrootPath)
 	if err != nil {
 		return fmt.Errorf("could not chroot: %v", err)
@@ -144,20 +139,17 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 		return fmt.Errorf("could not close rpc: %v", err)
 	}
 
-	if e.config.PipeFD != 0 {
-		pipe := os.NewFile(e.config.PipeFD, "")
-		sylog.Debugf("writing %v to pipe %d", SigCreated, e.config.PipeFD)
-		_, err := pipe.Write([]byte{SigCreated})
+	if e.conn != nil {
+		sylog.Debugf("writing %v to socket %d", SigCreated)
+		_, err := e.conn.Write([]byte{SigCreated})
 		if err != nil {
-			return fmt.Errorf("could not write pipe: %v", err)
+			return fmt.Errorf("could not write to socket: %v", err)
 		}
-		sylog.Debugf("closing pipe %d", e.config.PipeFD)
-		if err := pipe.Close(); err != nil {
-			sylog.Errorf("could not close pipe: %v", err)
+		if err := e.conn.Close(); err != nil {
+			sylog.Errorf("could not close socket: %v", err)
 		}
-		e.config.PipeFD = 0
+		e.conn = nil
 	}
-
 	return nil
 }
 

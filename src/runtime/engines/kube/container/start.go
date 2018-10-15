@@ -20,23 +20,25 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		execScript = "/.singularity.d/actions/exec"
 	)
 
-	if e.config.FifoPath != "" {
-		fifoFileName := filepath.Base(e.config.FifoPath)
-		path := filepath.Join("/tmp/fifo", fifoFileName)
-		sylog.Debugf("opening fifo %s to read byte", path)
-		fifo, err := os.OpenFile(path, os.O_RDONLY|syscall.O_CLOEXEC, 0)
+	if e.config.SocketFD != 0 {
+		socket := os.NewFile(e.config.SocketFD, "")
+		conn, err := net.FileConn(socket)
 		if err != nil {
-			return fmt.Errorf("could not open fifo: %v", err)
+			return fmt.Errorf("could not connect to socket: %v", err)
 		}
+		if err := socket.Close(); err != nil {
+			sylog.Errorf("could not close socket: %v", err)
+		}
+
 		data := make([]byte, 1)
-		sylog.Debugf("reading fifo...")
-		_, err = fifo.Read(data)
+		sylog.Debugf("reading socket...")
+		_, err = conn.Read(data)
 		if err != nil {
-			return fmt.Errorf("could not read fifo: %v", err)
+			return fmt.Errorf("could not read socket: %v", err)
 		}
-		sylog.Debugf("read %v from fifo", data)
-		if err = fifo.Close(); err != nil {
-			return fmt.Errorf("could not close fifo: %v", err)
+		sylog.Debugf("read %v from socket", data)
+		if err = conn.Close(); err != nil {
+			return fmt.Errorf("could not close socket connection: %v", err)
 		}
 	}
 	sylog.Debugf("container %q has started", e.containerName)
