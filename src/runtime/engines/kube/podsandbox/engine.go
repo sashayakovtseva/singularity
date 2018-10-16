@@ -24,18 +24,17 @@ const Name = "kube_podsandbox"
 type EngineOperations struct {
 	CommonConfig *config.Common
 	podConfig    *k8s.PodSandboxConfig
-	// name of the pod constructed from metadata. Instance file will be written under this name.
-	podName  string
+	// id of the pod constructed from metadata. Instance file will be written under this name.
+	podID    string
 	security *k8s.LinuxSandboxSecurityContext
 }
 
 // InitConfig simply saves passed config into engine. Passed cfg already includes parsed PodSandboxConfig.
 func (e *EngineOperations) InitConfig(cfg *config.Common) {
-	sylog.Debugf("%+v", cfg)
 	e.CommonConfig = cfg
 	e.podConfig = cfg.EngineConfig.(*k8s.PodSandboxConfig)
 	meta := e.podConfig.GetMetadata()
-	e.podName = fmt.Sprintf("%s_%s_%s_%d", meta.GetName(), meta.GetNamespace(), meta.GetUid(), meta.GetAttempt())
+	e.podID = fmt.Sprintf("%s_%s_%s_%d", meta.GetName(), meta.GetNamespace(), meta.GetUid(), meta.GetAttempt())
 	e.security = e.podConfig.GetLinux().GetSecurityContext()
 
 }
@@ -49,7 +48,7 @@ func (e *EngineOperations) Config() interface{} {
 // This method figures out which namespaces are necessary for pod and requests them
 // from C part of starter setting conf fields appropriately.
 func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error {
-	sylog.Debugf("preparing config for pod %q", e.podName)
+	sylog.Debugf("preparing config for pod %q", e.podID)
 	conf.SetInstance(true)
 
 	var namespaces []specs.LinuxNamespace
@@ -90,7 +89,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		sylog.Debugf("creating log directory")
 		err := os.MkdirAll(e.podConfig.GetLogDirectory(), os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("could not create log directory for pod %q", e.podName)
+			return fmt.Errorf("could not create log directory for pod %q", e.podID)
 		}
 	}
 

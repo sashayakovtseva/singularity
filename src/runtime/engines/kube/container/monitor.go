@@ -11,8 +11,8 @@ import (
 
 // PostStartProcess is called in smaster after successful execution of container process.
 func (e *EngineOperations) PostStartProcess(pid int) error {
-	sylog.Debugf("adding %s start timestamp file", e.containerName)
-	err := kube.AddStartedFile(e.containerName)
+	sylog.Debugf("adding %s start timestamp file", e.containerID)
+	err := kube.AddStartedFile(e.containerID)
 	if err != nil {
 		return fmt.Errorf("could not add starter timestamp file: %v", err)
 	}
@@ -21,7 +21,7 @@ func (e *EngineOperations) PostStartProcess(pid int) error {
 
 // MonitorContainer is responsible for waiting for container process.
 func (e *EngineOperations) MonitorContainer(pid int, signals chan os.Signal) (syscall.WaitStatus, error) {
-	sylog.Debugf("monitoring container %q", e.containerName)
+	sylog.Debugf("monitoring container %q", e.containerID)
 	for {
 		s := <-signals
 		sylog.Debugf("received signal: %v", s)
@@ -35,10 +35,10 @@ func (e *EngineOperations) MonitorContainer(pid int, signals chan os.Signal) (sy
 			if wpid != pid {
 				continue
 			}
-			if err := kube.AddFinishedFile(e.containerName); err != nil {
+			if err := kube.AddFinishedFile(e.containerID); err != nil {
 				return 0, fmt.Errorf("could not add finished timestamp file: %v", err)
 			}
-			err = kube.AddExitCodeFile(e.containerName, status)
+			err = kube.AddExitCodeFile(e.containerID, status)
 			return status, err
 		default:
 			return 0, fmt.Errorf("interrupted by signal %s", s.String())

@@ -36,7 +36,7 @@ type EngineOperations struct {
 	CommonConfig           *config.Common
 	config                 *Config
 	createContainerRequest *k8s.CreateContainerRequest
-	containerName          string
+	containerID            string
 	security               *k8s.LinuxContainerSecurityContext
 	containerConfig        *k8s.ContainerConfig
 	podConfig              *k8s.PodSandboxConfig
@@ -46,13 +46,12 @@ type EngineOperations struct {
 
 // InitConfig simply saves passed config into engine. Passed cfg already includes parsed ContainerConfig.
 func (e *EngineOperations) InitConfig(cfg *config.Common) {
-	sylog.Debugf("%+v", cfg)
 	e.CommonConfig = cfg
 	e.config = cfg.EngineConfig.(*Config)
 	e.createContainerRequest = e.config.CreateContainerRequest
 	e.containerConfig = e.createContainerRequest.GetConfig()
 	meta := e.containerConfig.GetMetadata()
-	e.containerName = fmt.Sprintf("%s_%d", meta.GetName(), meta.GetAttempt())
+	e.containerID = fmt.Sprintf("%s_%d", meta.GetName(), meta.GetAttempt())
 	e.podConfig = e.createContainerRequest.GetSandboxConfig()
 	e.security = e.containerConfig.GetLinux().GetSecurityContext()
 }
@@ -64,10 +63,9 @@ func (e *EngineOperations) Config() interface{} {
 
 // PrepareConfig is called in stage1 to validate and prepare container configuration.
 func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error {
-	sylog.Debugf("preparing config for container %q", e.containerName)
+	sylog.Debugf("preparing config for container %q", e.containerID)
 	conf.SetInstance(true)
 	conf.SetMountPropagation("shared")
-	ll("/proc/self/fd")
 
 	podInst, err := instance.Get(e.createContainerRequest.GetPodSandboxId())
 	if err != nil {

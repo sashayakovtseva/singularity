@@ -35,7 +35,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 		e.conn = socket
 	}
 
-	sylog.Debugf("setting up container %q", e.containerName)
+	sylog.Debugf("setting up container %q", e.containerID)
 	rpcOps := &client.RPC{
 		Client: rpc.NewClient(rpcConn),
 		Name:   e.CommonConfig.EngineName,
@@ -125,11 +125,11 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 		return fmt.Errorf("could not chroot: %v", err)
 	}
 
-	err = kube.AddInstanceFile(e.containerName, imagePath, containerPID, e.CommonConfig)
+	err = kube.AddInstanceFile(e.containerID, imagePath, containerPID, e.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
 	}
-	err = kube.AddCreatedFile(e.containerName)
+	err = kube.AddCreatedFile(e.containerID)
 	if err != nil {
 		return fmt.Errorf("could not add created timestamp file: %v", err)
 	}
@@ -140,7 +140,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 	}
 
 	if e.conn != nil {
-		sylog.Debugf("writing %v to socket %d", SigCreated)
 		_, err := e.conn.Write([]byte{SigCreated})
 		if err != nil {
 			return fmt.Errorf("could not write to socket: %v", err)

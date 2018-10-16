@@ -17,7 +17,7 @@ import (
 
 // StartProcess starts pod.
 func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
-	sylog.Debugf("starting pod %q", e.podName)
+	sylog.Debugf("starting pod %q", e.podID)
 	masterConn.Close()
 
 	hostname, err := os.Hostname()
@@ -42,7 +42,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		sylog.Debugf("received signal: %v", s)
 		switch s {
 		case syscall.SIGTERM:
-			sylog.Debugf("pod %q was asked to terminate", e.podName)
+			sylog.Debugf("pod %q was asked to terminate", e.podID)
 			os.Exit(0)
 		}
 	}

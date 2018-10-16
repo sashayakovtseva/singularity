@@ -22,7 +22,7 @@ import (
 // CreateContainer creates a pod. This method is used for proper
 // namespaces initialization before pod is even started.
 func (e *EngineOperations) CreateContainer(podPID int, rpcConn net.Conn) error {
-	sylog.Debugf("setting up pod %q", e.podName)
+	sylog.Debugf("setting up pod %q", e.podID)
 
 	rpcOps := &client.RPC{
 		Client: rpc.NewClient(rpcConn),
@@ -68,11 +68,11 @@ func (e *EngineOperations) CreateContainer(podPID int, rpcConn net.Conn) error {
 		}
 	}
 
-	err := kube.AddInstanceFile(e.podName, "", podPID, e.CommonConfig)
+	err := kube.AddInstanceFile(e.podID, "", podPID, e.CommonConfig)
 	if err != nil {
 		return fmt.Errorf("could not add instance file: %v", err)
 	}
-	err = kube.AddCreatedFile(e.podName)
+	err = kube.AddCreatedFile(e.podID)
 	if err != nil {
 		return fmt.Errorf("could not add created timestamp file: %v", err)
 	}

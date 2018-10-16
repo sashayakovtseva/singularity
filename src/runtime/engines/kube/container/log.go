@@ -18,10 +18,12 @@ var (
 	delimiter = []byte{' '}
 )
 
-// rfc3339NanoWriter wraps output so that it can be later parsed by k8s.
+// rfc3339NanoWriter wraps output so that it can be later parsed by kubelet.
 // CRI Log format example:
 //   2016-10-06T00:17:09.669794202Z stdout P log content 1
 //   2016-10-06T00:17:09.669794203Z stderr F log content 2
+// For further details see link:
+// https://github.com/kubernetes/community/blob/b3349d5b1354df814b67bbdee6890477f3c250cb/contributors/design-proposals/node/kubelet-cri-logging.md
 type rfc3339NanoWriter struct {
 	stream k8s.LogStreamType
 

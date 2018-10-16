@@ -33,7 +33,7 @@ const (
 	finishedFile = "finished"
 )
 
-// Info holds info about container's status.
+// Info holds info about container's status. All timestamps are in unix nano form.
 type Info struct {
 	CreatedAt  int64
 	StartedAt  int64

@@ -31,17 +31,15 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		}
 
 		data := make([]byte, 1)
-		sylog.Debugf("reading socket...")
 		_, err = socket.Read(data)
 		if err != nil {
 			return fmt.Errorf("could not read socket: %v", err)
 		}
-		sylog.Debugf("read %v from socket", data)
 		if err = socket.Close(); err != nil {
 			return fmt.Errorf("could not close socket connection: %v", err)
 		}
 	}
-	sylog.Debugf("container %q has started", e.containerName)
+	sylog.Debugf("container %q has started", e.containerID)
 
 	for _, kv := range e.containerConfig.GetEnvs() {
 		err := os.Setenv(kv.Key, kv.Value)
@@ -78,7 +76,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	errChan := make(chan error, 1)
 	signals := make(chan os.Signal, 1)
 
-	sylog.Debugf("starting container %q", e.containerName)
+	sylog.Debugf("starting container %q", e.containerID)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("exec %v failed: %v", command, err)
 	}
@@ -95,7 +93,7 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 			case syscall.SIGCONT:
 			case syscall.SIGCHLD:
 			case syscall.SIGTERM:
-				sylog.Debugf("container %q was asked to terminate", e.containerName)
+				sylog.Debugf("container %q was asked to terminate", e.containerID)
 				cmd.Process.Signal(syscall.SIGTERM)
 			default:
 				sylog.Debugf("propagating signal to others")
