@@ -57,7 +57,7 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 }
 
 // Config returns empty CreateContainerRequest that will be filled later with received JSON data.
-func (e *EngineOperations) Config() interface{} {
+func (e *EngineOperations) Config() config.EngineConfig {
 	return new(Config)
 }
 

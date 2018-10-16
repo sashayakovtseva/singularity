@@ -11,5 +11,8 @@ type Common struct {
 	EngineName  string `json:"engineName"`
 	ContainerID string `json:"containerID"`
 	// EngineConfig is the raw JSON representation of the Engine's underlying config
-	EngineConfig interface{} `json:"engineConfig"`
+	EngineConfig EngineConfig `json:"engineConfig"`
 }
+
+// EngineConfig is a generic interface to represent the implementations of an EngineConfig
+type EngineConfig interface{}

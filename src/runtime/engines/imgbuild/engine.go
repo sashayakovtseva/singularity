@@ -28,7 +28,7 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 }
 
 // Config returns the EngineConfig
-func (e *EngineOperations) Config() interface{} {
+func (e *EngineOperations) Config() config.EngineConfig {
 	return e.EngineConfig
 }
 

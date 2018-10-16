@@ -23,6 +23,6 @@ func (e *EngineOperations) InitConfig(cfg *config.Common) {
 // Config returns a pointer to a singularity.EngineConfig literal as a
 // config.EngineConfig interface. This pointer gets stored in the Engine.Common
 // field.
-func (e *EngineOperations) Config() interface{} {
+func (e *EngineOperations) Config() config.EngineConfig {
 	return e.EngineConfig
 }

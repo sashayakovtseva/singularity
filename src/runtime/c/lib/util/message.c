@@ -125,6 +125,7 @@ void _singularity_message(int level, const char *function, const char *file_in, 
             // This case shouldn't happen unless we have a very strange __progname; nul-terminating to be sure.
             syslog_string[559] = '\0';
         }
+
         syslog(syslog_level, "%s", syslog_string);
     }
 
@@ -135,31 +136,37 @@ void _singularity_message(int level, const char *function, const char *file_in, 
             char debug_string[25];
             char location_string[60];
             char tmp_header_string[86];
+//            snprintf(location_string, 60, "%s:%d:%s()", basename(strdup(file)), line, function); // Flawfinder: ignore
+//            snprintf(location_string, 60, "%s:%d ", basename(strdup(file)), line); // Flawfinder: ignore
             if ( function[0] == '_' ) {
                 function++;
             }
-            snprintf(location_string, 60, "%s()", function);
+            snprintf(location_string, 60, "%s()", function); // Flawfinder: ignore
             location_string[59] = '\0';
-            snprintf(debug_string, 25, "[U=%d,P=%d]", geteuid(), getpid());
+            snprintf(debug_string, 25, "[U=%d,P=%d]", geteuid(), getpid()); // Flawfinder: ignore
             debug_string[24] = '\0';
-            snprintf(tmp_header_string, 86, "%-19s%-30s", debug_string, location_string);
+            snprintf(tmp_header_string, 86, "%-18s %s", debug_string, location_string); // Flawfinder: ignore
             tmp_header_string[85] = '\0';
-            snprintf(header_string, 100, "%s%-8s%s", color, prefix, tmp_header_string);
+            snprintf(header_string, 100, "%s%-7s %-60s ", color, prefix, tmp_header_string); // Flawfinder: ignore
+//            header_string[94] = '\0';
         } else {
-            snprintf(header_string, 15, "%s%-8s: ", color, prefix);
+            snprintf(header_string, 15, "%s%-7s: ", color, prefix); // Flawfinder: ignore
+//            header_string[9] = '\0';
         }
 
         if ( level == INFO && messagelevel == INFO ) {
-            printf("%s" ANSI_COLOR_RESET, message);
+            printf("%s" ANSI_COLOR_RESET, message); // Flawfinder: ignore (false alarm, format is constant)
         } else if ( level == INFO ) {
-            printf("%s%s" ANSI_COLOR_RESET, header_string, message);
+            printf("%s%s" ANSI_COLOR_RESET, header_string, message); // Flawfinder: ignore (false alarm, format is constant)
         } else if ( level == LOG && messagelevel <= INFO ) {
             // Don't print anything...
         } else {
-            fprintf(stderr, "%s%s" ANSI_COLOR_RESET, header_string, message);
+            fprintf(stderr, "%s%s" ANSI_COLOR_RESET, header_string, message); // Flawfinder: ignore (false alarm, format is constant)
         }
 
         fflush(stdout);
         fflush(stderr);
+
     }
+
 }

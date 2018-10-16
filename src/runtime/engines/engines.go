@@ -32,7 +32,7 @@ type Engine struct {
 // EngineOperations is an interface describing necessary operations to launch a container process.
 type EngineOperations interface {
 	// Config returns the current EngineConfig, used to populate the Common struct.
-	Config() interface{}
+	Config() config.EngineConfig
 	// InitConfig is responsible for storing the parse config.Common inside
 	// the EngineOperations implementation.
 	InitConfig(*config.Common)
