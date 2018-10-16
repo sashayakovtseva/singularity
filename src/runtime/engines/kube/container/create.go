@@ -60,15 +60,11 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 		return fmt.Errorf("could not mount tmpfs into container directory %q: %v", containerPath, err)
 	}
 
-	err = mountImage(rpcOps, imagePath, lowerPath)
+	sylog.Debugf("creating %s", lowerPath)
+	_, err = rpcOps.Mkdir(lowerPath, 0755)
 	if err != nil {
-		return fmt.Errorf("could not mount image: %v", err)
+		return fmt.Errorf("could not create lower directory for overlay: %v", err)
 	}
-	err = createBindDirs(rpcOps, upperPath, e.containerConfig.GetMounts())
-	if err != nil {
-		return fmt.Errorf("could not mount binds: %v", err)
-	}
-
 	sylog.Debugf("creating %s", upperPath)
 	_, err = rpcOps.Mkdir(upperPath, 0755)
 	if err != nil {
@@ -83,6 +79,15 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 	_, err = rpcOps.Mkdir(chrootPath, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create root directory for overlay: %v", err)
+	}
+
+	err = mountImage(rpcOps, imagePath, lowerPath)
+	if err != nil {
+		return fmt.Errorf("could not mount image: %v", err)
+	}
+	err = createBindDirs(rpcOps, upperPath, e.containerConfig.GetMounts())
+	if err != nil {
+		return fmt.Errorf("could not mount binds: %v", err)
 	}
 
 	overlayOpts := fmt.Sprintf("lowerdir=%s,workdir=%s,upperdir=%s", lowerPath, workPath, upperPath)
@@ -104,7 +109,7 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 	if e.containerConfig.GetLogPath() != "" {
 		hostLogDir := filepath.Dir(filepath.Join(e.podConfig.GetLogDirectory(), e.containerConfig.GetLogPath()))
 		contLogDir := filepath.Join(chrootPath, "/tmp/logs")
-		_, err = rpcOps.Mkdir(contLogDir, 0755)
+		_, err = rpcOps.MkdirAll(contLogDir, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create log dir: %v", err)
 		}
@@ -183,12 +188,6 @@ func mountImage(rpcOps *client.RPC, imagePath, targetPath string) error {
 		return fmt.Errorf("could not attach loop dev: %v", err)
 	}
 
-	sylog.Debugf("creating %s", targetPath)
-	_, err = rpcOps.Mkdir(targetPath, 0755)
-	if err != nil {
-		return fmt.Errorf("could not make lowerdir for overlay: %v", err)
-	}
-
 	sylog.Debugf("mounting loop device #%d into %s", dev, targetPath)
 	_, err = rpcOps.Mount(fmt.Sprintf("/dev/loop%d", dev), targetPath, "squashfs", syscall.MS_NOSUID|syscall.MS_REC, "")
 	if err != nil {
@@ -201,7 +200,7 @@ func createBindDirs(rpcOps *client.RPC, targetRoot string, mounts []*k8s.Mount) 
 	for _, mount := range mounts {
 		target := filepath.Join(targetRoot, mount.GetContainerPath())
 		sylog.Debugf("creating %s", target)
-		_, err := rpcOps.Mkdir(target, 0755)
+		_, err := rpcOps.MkdirAll(target, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create directory in for bind mount: %v", err)
 		}

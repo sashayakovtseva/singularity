@@ -45,6 +45,16 @@ func (t *Methods) Mkdir(arguments *args.MkdirArgs, reply *int) (err error) {
 	return err
 }
 
+// MkdirAll performs a mkdir all with the specified arguments.
+func (t *Methods) MkdirAll(arguments *args.MkdirArgs, reply *int) (err error) {
+	mainthread.Execute(func() {
+		oldmask := syscall.Umask(0)
+		err = os.MkdirAll(arguments.Path, arguments.Perm)
+		syscall.Umask(oldmask)
+	})
+	return err
+}
+
 // Chroot performs a chroot with the specified arguments.
 func (t *Methods) Chroot(arguments *args.ChrootArgs, reply *int) error {
 	// idea taken from libcontainer (and also LXC developpers) to avoid

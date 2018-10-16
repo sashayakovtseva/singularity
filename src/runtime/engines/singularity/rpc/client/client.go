@@ -44,6 +44,17 @@ func (t *RPC) Mkdir(path string, perm os.FileMode) (int, error) {
 	return reply, err
 }
 
+// MkdirAll calls the mkdir all RPC using the supplied arguments.
+func (t *RPC) MkdirAll(path string, perm os.FileMode) (int, error) {
+	arguments := &args.MkdirArgs{
+		Path: path,
+		Perm: perm,
+	}
+	var reply int
+	err := t.Client.Call(t.Name+".MkdirAll", arguments, &reply)
+	return reply, err
+}
+
 // Chroot calls the chroot RPC using the supplied arguments.
 func (t *RPC) Chroot(root string) (int, error) {
 	arguments := &args.ChrootArgs{
