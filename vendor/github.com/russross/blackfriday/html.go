@@ -255,21 +255,33 @@ func (options *Html) HRule(out *bytes.Buffer) {
 	out.WriteByte('\n')
 }
 
-func (options *Html) BlockCode(out *bytes.Buffer, text []byte, info string) {
+func (options *Html) BlockCode(out *bytes.Buffer, text []byte, lang string) {
 	doubleSpace(out)
 
-	endOfLang := strings.IndexAny(info, "\t ")
-	if endOfLang < 0 {
-		endOfLang = len(info)
+	// parse out the language names/classes
+	count := 0
+	for _, elt := range strings.Fields(lang) {
+		if elt[0] == '.' {
+			elt = elt[1:]
+		}
+		if len(elt) == 0 {
+			continue
+		}
+		if count == 0 {
+			out.WriteString("<pre><code class=\"language-")
+		} else {
+			out.WriteByte(' ')
+		}
+		attrEscape(out, []byte(elt))
+		count++
 	}
-	lang := info[:endOfLang]
-	if len(lang) == 0 || lang == "." {
+
+	if count == 0 {
 		out.WriteString("<pre><code>")
 	} else {
-		out.WriteString("<pre><code class=\"language-")
-		attrEscape(out, []byte(lang))
 		out.WriteString("\">")
 	}
+
 	attrEscape(out, text)
 	out.WriteString("</code></pre>\n")
 }

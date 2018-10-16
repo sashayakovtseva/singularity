@@ -94,8 +94,7 @@ func (g *Generator) initConfigLinuxResourcesBlockIO() {
 	}
 }
 
-// InitConfigLinuxResourcesCPU initializes CPU of Linux resources
-func (g *Generator) InitConfigLinuxResourcesCPU() {
+func (g *Generator) initConfigLinuxResourcesCPU() {
 	g.initConfigLinuxResources()
 	if g.Config.Linux.Resources.CPU == nil {
 		g.Config.Linux.Resources.CPU = &rspec.LinuxCPU{}

@@ -107,7 +107,7 @@ func (l *jsonReferenceLoader) LoaderFactory() JSONLoaderFactory {
 }
 
 // NewReferenceLoader returns a JSON reference loader using the given source and the local OS file system.
-func NewReferenceLoader(source string) JSONLoader {
+func NewReferenceLoader(source string) *jsonReferenceLoader {
 	return &jsonReferenceLoader{
 		fs:     osFS,
 		source: source,
@@ -115,7 +115,7 @@ func NewReferenceLoader(source string) JSONLoader {
 }
 
 // NewReferenceLoaderFileSystem returns a JSON reference loader using the given source and file system.
-func NewReferenceLoaderFileSystem(source string, fs http.FileSystem) JSONLoader {
+func NewReferenceLoaderFileSystem(source string, fs http.FileSystem) *jsonReferenceLoader {
 	return &jsonReferenceLoader{
 		fs:     fs,
 		source: source,
@@ -138,11 +138,13 @@ func (l *jsonReferenceLoader) LoadJSON() (interface{}, error) {
 
 	if reference.HasFileScheme {
 
-		filename := strings.TrimPrefix(refToUrl.String(), "file://")
+		filename := strings.Replace(refToUrl.GetUrl().Path, "file://", "", -1)
 		if runtime.GOOS == "windows" {
 			// on Windows, a file URL may have an extra leading slash, use slashes
 			// instead of backslashes, and have spaces escaped
-			filename = strings.TrimPrefix(filename, "/")
+			if strings.HasPrefix(filename, "/") {
+				filename = filename[1:]
+			}
 			filename = filepath.FromSlash(filename)
 		}
 
@@ -219,7 +221,7 @@ func (l *jsonStringLoader) LoaderFactory() JSONLoaderFactory {
 	return &DefaultJSONLoaderFactory{}
 }
 
-func NewStringLoader(source string) JSONLoader {
+func NewStringLoader(source string) *jsonStringLoader {
 	return &jsonStringLoader{source: source}
 }
 
@@ -247,7 +249,7 @@ func (l *jsonBytesLoader) LoaderFactory() JSONLoaderFactory {
 	return &DefaultJSONLoaderFactory{}
 }
 
-func NewBytesLoader(source []byte) JSONLoader {
+func NewBytesLoader(source []byte) *jsonBytesLoader {
 	return &jsonBytesLoader{source: source}
 }
 
@@ -274,7 +276,7 @@ func (l *jsonGoLoader) LoaderFactory() JSONLoaderFactory {
 	return &DefaultJSONLoaderFactory{}
 }
 
-func NewGoLoader(source interface{}) JSONLoader {
+func NewGoLoader(source interface{}) *jsonGoLoader {
 	return &jsonGoLoader{source: source}
 }
 
@@ -295,12 +297,12 @@ type jsonIOLoader struct {
 	buf *bytes.Buffer
 }
 
-func NewReaderLoader(source io.Reader) (JSONLoader, io.Reader) {
+func NewReaderLoader(source io.Reader) (*jsonIOLoader, io.Reader) {
 	buf := &bytes.Buffer{}
 	return &jsonIOLoader{buf: buf}, io.TeeReader(source, buf)
 }
 
-func NewWriterLoader(source io.Writer) (JSONLoader, io.Writer) {
+func NewWriterLoader(source io.Writer) (*jsonIOLoader, io.Writer) {
 	buf := &bytes.Buffer{}
 	return &jsonIOLoader{buf: buf}, io.MultiWriter(source, buf)
 }

@@ -2,12 +2,10 @@ package dhcp4client
 
 import (
 	"bytes"
-	"fmt"
 	"hash/fnv"
 	"math/rand"
 	"net"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/d2g/dhcp4"
@@ -54,7 +52,7 @@ func New(options ...func(*Client) error) (*Client, error) {
 		// Hence, seed a random number generator with the current time and hardware
 		// address.
 		h := fnv.New64()
-		h.Write(c.hardwareAddr)
+		h.Sum(c.hardwareAddr)
 		seed := int64(h.Sum64()) + time.Now().Unix()
 		rnd := rand.New(rand.NewSource(seed))
 		var rndMu sync.Mutex
@@ -144,32 +142,13 @@ func (c *Client) SendDiscoverPacket() (dhcp4.Packet, error) {
 	return discoveryPacket, c.SendPacket(discoveryPacket)
 }
 
-// TimeoutError records a timeout when waiting for a DHCP packet.
-type TimeoutError struct {
-	Timeout time.Duration
-}
-
-func (te *TimeoutError) Error() string {
-	return fmt.Sprintf("no DHCP packet received within %v", te.Timeout)
-}
-
 //Retreive Offer...
 //Wait for the offer for a specific Discovery Packet.
 func (c *Client) GetOffer(discoverPacket *dhcp4.Packet) (dhcp4.Packet, error) {
-	start := time.Now()
-
 	for {
-		timeout := c.timeout - time.Since(start)
-		if timeout < 0 {
-			return dhcp4.Packet{}, &TimeoutError{Timeout: c.timeout}
-		}
-
-		c.connection.SetReadTimeout(timeout)
+		c.connection.SetReadTimeout(c.timeout)
 		readBuffer, source, err := c.connection.ReadFrom()
 		if err != nil {
-			if errno, ok := err.(syscall.Errno); ok && errno == syscall.EAGAIN {
-				return dhcp4.Packet{}, &TimeoutError{Timeout: c.timeout}
-			}
 			return dhcp4.Packet{}, err
 		}
 
@@ -207,20 +186,10 @@ func (c *Client) SendRequest(offerPacket *dhcp4.Packet) (dhcp4.Packet, error) {
 //Retreive Acknowledgement
 //Wait for the offer for a specific Request Packet.
 func (c *Client) GetAcknowledgement(requestPacket *dhcp4.Packet) (dhcp4.Packet, error) {
-	start := time.Now()
-
 	for {
-		timeout := c.timeout - time.Since(start)
-		if timeout < 0 {
-			return dhcp4.Packet{}, &TimeoutError{Timeout: c.timeout}
-		}
-
-		c.connection.SetReadTimeout(timeout)
+		c.connection.SetReadTimeout(c.timeout)
 		readBuffer, source, err := c.connection.ReadFrom()
 		if err != nil {
-			if errno, ok := err.(syscall.Errno); ok && errno == syscall.EAGAIN {
-				return dhcp4.Packet{}, &TimeoutError{Timeout: c.timeout}
-			}
 			return dhcp4.Packet{}, err
 		}
 
