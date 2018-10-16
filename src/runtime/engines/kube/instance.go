@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,8 +11,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"bytes"
 
 	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
