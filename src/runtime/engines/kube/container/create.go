@@ -54,11 +54,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 		workPath      = filepath.Join(containerPath, "work")
 		chrootPath    = filepath.Join(containerPath, "root")
 	)
-	sylog.Debugf("creating %s", containerPath)
-	_, err = rpcOps.Mkdir(containerPath, 0755)
-	if err != nil {
-		return fmt.Errorf("could not create directory for container: %v", err)
-	}
 	sylog.Debugf("mounting tmpfs into %s", containerPath)
 	_, err = rpcOps.Mount("tmpfs", containerPath, "tmpfs", syscall.MS_NOSUID, "")
 	if err != nil {

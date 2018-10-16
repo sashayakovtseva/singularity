@@ -55,7 +55,6 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 		err = engine.CreateContainer(containerPid, rpcConn)
 		if err != nil {
 			fatalChan <- fmt.Errorf("container creation failed: %s", err)
-			return
 		}
 		runtime.Goexit()
 	}()
@@ -125,6 +124,7 @@ func SMaster(rpcSocket, masterSocket int, starterConfig *starter.Config, jsonByt
 				syscall.Kill(ppid, syscall.SIGUSR2)
 			}
 		}
+		syscall.Kill(containerPid, syscall.SIGKILL)
 		sylog.Fatalf("%s", fatal)
 	}
 
