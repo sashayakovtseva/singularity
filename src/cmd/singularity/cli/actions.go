@@ -3,6 +3,8 @@
 // LICENSE.md file distributed with the sources of this project regarding your
 // rights to use or distribute this software.
 
+// +build linux
+
 package cli
 
 import (
@@ -151,7 +153,7 @@ func handleShub(u string) (string, error) {
 }
 
 func replaceURIWithImage(cmd *cobra.Command, args []string) {
-	// If args[0] is not transport:ref (ex. intance://...) formatted return, not a URI
+	// If args[0] is not transport:ref (ex. instance://...) formatted return, not a URI
 	t, _ := uri.SplitURI(args[0])
 	if t == "instance" || t == "" {
 		return

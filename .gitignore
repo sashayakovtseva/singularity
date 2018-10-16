@@ -8,10 +8,8 @@ singularity-*.tar.gz
 generate_docs
 
 .vscode
-.idea/
 .DS_store
-
-vendor/
+.idea/
 builddir/
 src/pkg/buildcfg/config.go
 trash.lock
