@@ -11,6 +11,10 @@ import (
 
 // PostStartProcess is called in smaster after successful execution of container process.
 func (e *EngineOperations) PostStartProcess(pid int) error {
+	if e.isExecSync {
+		return nil
+	}
+
 	sylog.Debugf("adding %s start timestamp file", e.containerID)
 	err := kube.AddStartedFile(e.containerID)
 	if err != nil {
@@ -49,6 +53,10 @@ func (e *EngineOperations) MonitorContainer(pid int, signals chan os.Signal) (sy
 // CleanupContainer is called in smaster after the MontiorContainer returns.
 // This method will NOT remove instance file since it is assumed to be done by CRI server.
 func (e *EngineOperations) CleanupContainer() error {
+	if e.isExecSync {
+		return nil
+	}
+
 	if e.conn != nil {
 		sylog.Debugf("sending %v to socket", SigCleanup)
 		_, err := e.conn.Write([]byte{SigCleanup})

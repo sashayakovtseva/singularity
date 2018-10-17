@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"encoding/json"
+
+	"github.com/sylabs/singularity/src/pkg/instance"
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
@@ -19,6 +22,10 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 		runScript  = "/.singularity.d/runscript"
 		execScript = "/.singularity.d/actions/exec"
 	)
+
+	if e.isExecSync {
+		return e.execSync(masterConn)
+	}
 
 	if e.config.Socket != 0 {
 		comm := os.NewFile(uintptr(e.config.Socket), "")
@@ -52,9 +59,13 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 	if len(command) == 0 {
 		command = []string{runScript}
 	}
+	workDir := e.containerConfig.WorkingDir
+	if workDir == "" {
+		workDir = "/"
+	}
 
 	cmd := exec.Command(execScript, command...)
-	cmd.Dir = e.containerConfig.WorkingDir
+	cmd.Dir = workDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -123,4 +134,49 @@ func (e *EngineOperations) StartProcess(masterConn net.Conn) error {
 			os.Exit(status.ExitStatus())
 		}
 	}
+}
+
+func (e *EngineOperations) execSync(masterConn net.Conn) error {
+	const (
+		execScript = "/.singularity.d/actions/exec"
+	)
+
+	contInst, err := instance.Get(e.containerID)
+	if err != nil {
+		return fmt.Errorf("could not get container instance %q: %v", e.containerID, err)
+	}
+
+	contConfig := new(Config)
+	if err := json.Unmarshal(contInst.Config, contConfig); err != nil {
+		return fmt.Errorf("could not unmarshal container config: %v", err)
+	}
+
+	contProcPath := fmt.Sprintf(`/proc/%d`, contInst.Pid)
+
+	for _, kv := range contConfig.CreateContainerRequest.GetConfig().GetEnvs() {
+		err := os.Setenv(kv.Key, kv.Value)
+		if err != nil {
+			return fmt.Errorf("could not set environment: %v", err)
+		}
+	}
+
+	command := e.config.ExecSyncRequest.Cmd
+	if len(command) == 0 {
+		return fmt.Errorf("no command to execute")
+	}
+
+	cmd := exec.Command(execScript, command...)
+	cmd.Dir = filepath.Join(contProcPath, "cwd")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Chroot: filepath.Join(contProcPath, "root"),
+	}
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("exec sync %v failed: %v", command, err)
+	}
+	masterConn.Close()
+	return nil
 }

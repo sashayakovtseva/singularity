@@ -20,6 +20,10 @@ import (
 // CreateContainer creates a container. This method is called in the same
 // namespaces as target container and used for proper namespaces initialization.
 func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (err error) {
+	if e.isExecSync {
+		return nil
+	}
+
 	defer func() {
 		e.createError = err
 	}()
@@ -132,11 +136,6 @@ func (e *EngineOperations) CreateContainer(containerPID int, rpcConn net.Conn) (
 	err = kube.AddCreatedFile(e.containerID)
 	if err != nil {
 		return fmt.Errorf("could not add created timestamp file: %v", err)
-	}
-
-	err = rpcConn.Close()
-	if err != nil {
-		return fmt.Errorf("could not close rpc: %v", err)
 	}
 
 	if e.conn != nil {

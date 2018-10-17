@@ -14,6 +14,7 @@ import (
 	"github.com/sylabs/singularity/src/pkg/sylog"
 	"github.com/sylabs/singularity/src/runtime/engines/config"
 	"github.com/sylabs/singularity/src/runtime/engines/config/starter"
+	"github.com/sylabs/singularity/src/runtime/engines/kube"
 	k8s "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
@@ -33,10 +34,8 @@ type EngineOperations struct {
 func (e *EngineOperations) InitConfig(cfg *config.Common) {
 	e.CommonConfig = cfg
 	e.podConfig = cfg.EngineConfig.(*k8s.PodSandboxConfig)
-	meta := e.podConfig.GetMetadata()
-	e.podID = fmt.Sprintf("%s_%s_%s_%d", meta.GetName(), meta.GetNamespace(), meta.GetUid(), meta.GetAttempt())
+	e.podID = kube.PodID(e.podConfig.GetMetadata())
 	e.security = e.podConfig.GetLinux().GetSecurityContext()
-
 }
 
 // Config returns empty PodSandboxConfig that will be filled later with received JSON data.
