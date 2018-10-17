@@ -80,7 +80,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 		Type: specs.MountNamespace,
 	})
 	sylog.Debugf("requesting PID namespace")
-	createNs = append(joinNs, specs.LinuxNamespace{
+	createNs = append(createNs, specs.LinuxNamespace{
 		Type: specs.PIDNamespace,
 	})
 
@@ -96,7 +96,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	switch e.security.GetNamespaceOptions().GetIpc() {
 	case k8s.NamespaceMode_CONTAINER:
 		sylog.Debugf("requesting IPC namespace")
-		createNs = append(joinNs, specs.LinuxNamespace{
+		createNs = append(createNs, specs.LinuxNamespace{
 			Type: specs.IPCNamespace,
 		})
 	case k8s.NamespaceMode_POD:
@@ -110,7 +110,7 @@ func (e *EngineOperations) PrepareConfig(_ net.Conn, conf *starter.Config) error
 	switch e.security.GetNamespaceOptions().GetNetwork() {
 	case k8s.NamespaceMode_CONTAINER:
 		sylog.Debugf("requesting NET namespace")
-		createNs = append(joinNs, specs.LinuxNamespace{
+		createNs = append(createNs, specs.LinuxNamespace{
 			Type: specs.NetworkNamespace,
 		})
 	case k8s.NamespaceMode_POD:
