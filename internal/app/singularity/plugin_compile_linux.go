@@ -193,23 +193,45 @@ func makeSIF(sifPath, pluginPath, manifestPath, gzPath string) error {
 }
 
 func compressDir(sourcePath, destDir string) (string, error) {
-	dir, err := os.Open(sourcePath)
-	if err != nil {
-		return "", fmt.Errorf("could not open plugin dir %s", err)
-	}
-
 	destFilePath := filepath.Join(destDir, "plugin.tar.gz")
+
 	destFile, err := os.Create(destFilePath)
 	if err != nil {
 		return "", fmt.Errorf("could not create plugin zip file %s", err)
 	}
+	defer destFile.Close()
 
 	gzw := gzip.NewWriter(destFile)
+	defer gzw.Close()
 	trw := tar.NewWriter(gzw)
+	defer trw.Close()
 
-	_, err = io.Copy(trw, dir)
+	err = filepath.Walk(sourcePath, func(file string, fi os.FileInfo, err error) error {
+		header, err := tar.FileInfoHeader(fi, file)
+		if err != nil {
+			return err
+		}
+
+		if err := trw.WriteHeader(header); err != nil {
+			return err
+		}
+
+		if fi.IsDir() {
+			return nil
+		}
+
+		data, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		defer data.Close()
+		if _, err := io.Copy(trw, data); err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		return "", fmt.Errorf("could not compress dir err %s", err)
+		return "", fmt.Errorf("Could not compress dir: %s", err)
 	}
 
 	return destFilePath, nil
