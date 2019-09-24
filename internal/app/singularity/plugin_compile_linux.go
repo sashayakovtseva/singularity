@@ -20,10 +20,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/gofrs/uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/sylabs/sif/pkg/sif"
 	"github.com/sylabs/singularity/internal/pkg/buildcfg"
 	"github.com/sylabs/singularity/internal/pkg/sylog"
+	pluginapi "github.com/sylabs/singularity/pkg/plugin"
 )
 
 // getSingularitySrcDir returns the source directory for singularity.
@@ -51,9 +52,9 @@ func getSingularitySrcDir() (string, error) {
 // plugin's source code directory; and destSif, the path to the intended final
 // location of the plugin SIF file.
 func CompilePlugin(sourceDir, mainPkg, destSif, tmpDir string) error {
-	pluginDir, err := ioutil.TempDir(tmpDir, filpath.Base(sourceDir))
+	pluginDir, err := ioutil.TempDir(tmpDir, filepath.Base(sourceDir))
 	if err != nil {
-		return nil, fmt.Errorf("could not create temp dir: %v", err)
+		return fmt.Errorf("could not create temp dir: %v", err)
 	}
 	defer os.RemoveAll(pluginDir)
 
@@ -73,7 +74,7 @@ func CompilePlugin(sourceDir, mainPkg, destSif, tmpDir string) error {
 	}
 
 	// convert the built plugin object into a sif
-	if err := makeSIF(destSif, sourceDir, pluginPath, manifestPath, gzPath); err != nil {
+	if err := makeSIF(destSif, pluginPath, manifestPath, gzPath); err != nil {
 		return fmt.Errorf("while making sif file: %s", err)
 	}
 
@@ -146,7 +147,7 @@ func generateManifest(pluginPath, destDir string) (string, error) {
 
 // makeSIF takes in two arguments: sourceDir, the path to the plugin source directory;
 // and sifPath, the path to the final .sif file which is ready to be used.
-func makeSIF(sifPath, sourceDir, pluginPath, manifestPath, gzPath string) error {
+func makeSIF(sifPath, pluginPath, manifestPath, gzPath string) error {
 	plCreateInfo := sif.CreateInfo{
 		Pathname:   sifPath,
 		Launchstr:  sif.HdrLaunch,
