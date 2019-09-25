@@ -197,7 +197,7 @@ func compressDir(sourcePath, destDir string) (string, error) {
 
 	destFile, err := os.Create(destFilePath)
 	if err != nil {
-		return "", fmt.Errorf("could not create plugin zip file %s", err)
+		return "", fmt.Errorf("could not create plugin gzip file: %s", err)
 	}
 	defer destFile.Close()
 
@@ -231,7 +231,7 @@ func compressDir(sourcePath, destDir string) (string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("Could not compress dir: %s", err)
+		return "", fmt.Errorf("could not compress dir: %s", err)
 	}
 
 	return destFilePath, nil
