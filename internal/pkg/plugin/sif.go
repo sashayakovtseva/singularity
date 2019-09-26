@@ -15,7 +15,7 @@ const (
 	pluginBinaryName = "plugin.so"
 	// pluginManifestName is the name of the plugin manifest within
 	// the SIF file
-	pluginManifestName = "plugin.manifest"
+	pluginManifestName = "manifest.json"
 )
 
 // sifReader defines helper functions fimg *sif.FileImage.
