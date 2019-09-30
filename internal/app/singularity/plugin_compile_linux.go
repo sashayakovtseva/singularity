@@ -193,8 +193,16 @@ func makeSIF(sifPath, pluginPath, manifestPath, gzPath string) error {
 }
 
 func compressDir(sourcePath, destDir string) (string, error) {
-	destFilePath := filepath.Join(destDir, "plugin.tar.gz")
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("Could not get working dir: %s", err)
+	}
+	sourcePath, err = filepath.Rel(wd, sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("Could not make source path relative: %s", err)
+	}
 
+	destFilePath := filepath.Join(destDir, "plugin.tar.gz")
 	destFile, err := os.Create(destFilePath)
 	if err != nil {
 		return "", fmt.Errorf("could not create plugin gzip file: %s", err)
@@ -211,6 +219,7 @@ func compressDir(sourcePath, destDir string) (string, error) {
 		if err != nil {
 			return err
 		}
+		header.Name = file
 
 		if err := trw.WriteHeader(header); err != nil {
 			return err
