@@ -43,20 +43,20 @@ type Plugin struct {
 // Initializer is an interface which stores the object of a plugin's implementation. The Initialize
 // method allows the plugin to register its functions with the Runtime to be called later.
 type Initializer interface {
-	Initialize(Registry)
+	Initialize(Registry) error
 }
 
 // Registry exposes functions to a plugin during Initialize()
 // which allows the plugin to register its plugin hooks.
 type Registry interface {
 	AddCLIMutator(m CLIMutator) error
-	AddRuntimeMutator(m RuntimeMutator) error
+	AddEngineConfigMutator(m EngineConfigMutator) error
 }
 
 type CLIMutator struct {
 	Mutate func(*cmdline.CommandManager)
 }
 
-type RuntimeMutator struct {
+type EngineConfigMutator struct {
 	Mutate func(*singularity.EngineConfig)
 }

@@ -85,7 +85,7 @@ func fakerootExec(cmdArgs []string) {
 	sylog.Fatalf("%s", err)
 }
 
-func run(cmd *cobra.Command, args []string) {
+func runBuild(cmd *cobra.Command, args []string) {
 	buildFormat := "sif"
 	if sandbox {
 		buildFormat = "sandbox"
@@ -99,8 +99,8 @@ func run(cmd *cobra.Command, args []string) {
 	spec := args[1]
 
 	// check if target collides with existing file
-	if ok := checkBuildTarget(dest, update); !ok {
-		os.Exit(1)
+	if err := checkBuildTarget(dest); err != nil {
+		sylog.Fatalf("%s", err)
 	}
 
 	if remote {
