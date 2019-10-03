@@ -193,6 +193,10 @@ func (m *Meta) installPluginSource() error {
 		return fmt.Errorf("could not create gzip reader: %s", err)
 	}
 
+	if err := os.RemoveAll(m.sourceDirName()); err != nil {
+		return fmt.Errorf("could not remove old source: %s", err)
+	}
+
 	tarR := tar.NewReader(gzipR)
 	for {
 		h, err := tarR.Next()
