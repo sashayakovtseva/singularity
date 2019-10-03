@@ -1,6 +1,9 @@
 package plugin
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,12 +22,14 @@ const (
 	// dirRoot is the root directory for the plugin
 	// installation, typically located within LIBEXECDIR.
 	dirRoot = "singularity/plugin"
-	// nameImage is the name of the SIF image of the plugin
+	// nameImage is the name of the SIF image of the plugin.
 	nameImage = "plugin.sif"
-	// nameBinary is the name of the plugin object
+	// nameBinary is the name of the plugin object.
 	nameBinary = "object.so"
-	// nameConfig is the name of the plugin's config file
+	// nameConfig is the name of the plugin's config file.
 	nameConfig = "config.yaml"
+	// nameSource plugin source directory name.
+	nameSource = "src"
 )
 
 // Meta is an internal representation of a plugin binary
@@ -119,6 +124,10 @@ func (m *Meta) install(dstdir string) error {
 		return err
 	}
 
+	if err := m.installPluginSource(); err != nil {
+		return err
+	}
+
 	if err := m.installMeta(dstdir); err != nil {
 		return err
 	}
@@ -168,6 +177,52 @@ func (m *Meta) installMeta(dstdir string) error {
 	_, err = fh.Write(data)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (m *Meta) installPluginSource() error {
+	zipDesc := m.fimg.DescrArr[2]
+	start := zipDesc.Fileoff
+	end := start + zipDesc.Filelen
+
+	buff := bytes.NewBuffer(m.fimg.Filedata[start:end])
+	gzipR, err := gzip.NewReader(buff)
+	if err != nil {
+		return fmt.Errorf("could not create gzip reader: %s", err)
+	}
+
+	tarR := tar.NewReader(gzipR)
+	for {
+		h, err := tarR.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return fmt.Errorf("could not get tar header: %s", err)
+		}
+
+		target := filepath.Join(m.sourceDirName(), h.Name)
+
+		if h.FileInfo().IsDir() {
+			if err = os.MkdirAll(target, h.FileInfo().Mode()); err != nil {
+				return fmt.Errorf("could not create dir: %s", err)
+			}
+			continue
+		}
+
+		file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, h.FileInfo().Mode())
+		if err != nil {
+			return fmt.Errorf("could not create file: %s", err)
+		}
+		defer file.Close()
+
+		_, err = io.Copy(file, tarR)
+		if err != nil {
+			return fmt.Errorf("could not copy data from tar reader: %s", err)
+		}
 	}
 
 	return nil
@@ -264,6 +319,10 @@ func (m *Meta) binaryName() string {
 
 func (m *Meta) configName() string {
 	return filepath.Join(m.Path, nameConfig)
+}
+
+func (m *Meta) sourceDirName() string {
+	return filepath.Join(m.Path, nameSource)
 }
 
 func (m *Meta) baseDir() string {
