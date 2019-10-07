@@ -38,6 +38,8 @@ type sifReader interface {
 //   - Parttype: sif.PartData
 // DESCR[1]: Sifmanifest
 //   - Datatype: sif.DataGenericJSON
+// DESCR[2]: Pluginsource (optional)
+//   - Datatype: sif.DataGeneric
 func isPluginFile(fimg sifReader) bool {
 	if fimg.Descriptors() < 2 {
 		return false

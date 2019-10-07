@@ -30,6 +30,12 @@ const (
 	nameConfig = "config.yaml"
 	// nameSource plugin source directory name.
 	nameSource = "src"
+
+	nameGzipSource = "plugin.tar.gz"
+)
+
+var (
+	errNoPluginSource = errors.New("there is no plugin source inside sif")
 )
 
 // Meta is an internal representation of a plugin binary
@@ -125,7 +131,10 @@ func (m *Meta) install(dstdir string) error {
 	}
 
 	if err := m.installPluginSource(); err != nil {
-		return err
+		if err != errNoPluginSource {
+			return err
+		}
+		sylog.Infof("There is no plugin source code in sif. Recompilation would not be possible.")
 	}
 
 	if err := m.installMeta(dstdir); err != nil {
@@ -183,7 +192,15 @@ func (m *Meta) installMeta(dstdir string) error {
 }
 
 func (m *Meta) installPluginSource() error {
+	if len(m.fimg.DescrArr) < 3 {
+		return errNoPluginSource
+	}
+
 	zipDesc := m.fimg.DescrArr[2]
+	if zipDesc.GetName() != nameGzipSource {
+		return errNoPluginSource
+	}
+
 	start := zipDesc.Fileoff
 	end := start + zipDesc.Filelen
 
