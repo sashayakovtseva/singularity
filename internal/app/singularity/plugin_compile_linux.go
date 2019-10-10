@@ -86,12 +86,6 @@ func CompilePlugin(sourceDir, destSif, buildTags string) error {
 //
 // This function essentially runs the `go build -buildmode=plugin [...]` command
 func buildPlugin(sourceDir, buildTags string) (string, error) {
-	workpath, err := getSingularitySrcDir()
-	if err != nil {
-		return "", errors.New("singularity source directory not found")
-	}
-
-	// assuming that sourceDir is within trimpath for now
 	out := pluginObjPath(sourceDir)
 
 	goTool, err := exec.LookPath("go")
@@ -101,20 +95,22 @@ func buildPlugin(sourceDir, buildTags string) (string, error) {
 
 	args := []string{
 		"build",
+		"-trimpath",
 		"-o", out,
 		"-buildmode=plugin",
-		"-mod=vendor",
 		"-tags", buildTags,
-		fmt.Sprintf("-gcflags=all=-trimpath=%s", workpath),
-		fmt.Sprintf("-asmflags=all=-trimpath=%s", workpath),
-		sourceDir,
 	}
+
+	extra := os.Getenv("PL_EXTRA")
+	if extra != "" {
+		args = append(args, extra)
+	}
+
+	args = append(args, sourceDir)
 
 	sylog.Debugf("Running: %s %s", goTool, strings.Join(args, " "))
 
 	buildcmd := exec.Command(goTool, args...)
-
-	buildcmd.Dir = workpath
 	buildcmd.Stderr = os.Stderr
 	buildcmd.Stdout = os.Stdout
 	buildcmd.Stdin = os.Stdin

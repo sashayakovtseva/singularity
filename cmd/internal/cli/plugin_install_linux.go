@@ -6,12 +6,15 @@
 package cli
 
 import (
+	"fmt"
+	"plugin"
+	"reflect"
+
 	"github.com/spf13/cobra"
 	"github.com/sylabs/singularity/docs"
-	"github.com/sylabs/singularity/internal/app/singularity"
-	"github.com/sylabs/singularity/internal/pkg/buildcfg"
 	"github.com/sylabs/singularity/internal/pkg/sylog"
 	"github.com/sylabs/singularity/pkg/cmdline"
+	pluginapi "github.com/sylabs/singularity/pkg/plugin"
 )
 
 // -n|--name
@@ -34,12 +37,17 @@ func init() {
 //
 // singularity plugin install <path> [-n name]
 var PluginInstallCmd = &cobra.Command{
-	PreRun: EnsureRootPriv,
+	// PreRun: EnsureRootPriv,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := singularity.InstallPlugin(args[0], buildcfg.LIBEXECDIR)
+		_, err := open(args[0])
 		if err != nil {
-			sylog.Fatalf("Failed to install plugin %q: %s.", args[0], err)
+			sylog.Fatalf("Could not open plugin: %v", err)
 		}
+
+		// err := singularity.InstallPlugin(args[0], buildcfg.LIBEXECDIR)
+		// if err != nil {
+		// 	sylog.Fatalf("Failed to install plugin %q: %s.", args[0], err)
+		// }
 	},
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
@@ -48,4 +56,34 @@ var PluginInstallCmd = &cobra.Command{
 	Short:   docs.PluginInstallShort,
 	Long:    docs.PluginInstallLong,
 	Example: docs.PluginInstallExample,
+}
+
+func open(path string) (*pluginapi.Plugin, error) {
+	pluginPointer, err := plugin.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	pluginObject, err := getPluginObject(pluginPointer)
+	if err != nil {
+		return nil, err
+	}
+
+	return pluginObject, nil
+}
+
+func getPluginObject(pl *plugin.Plugin) (*pluginapi.Plugin, error) {
+	sym, err := pl.Lookup(pluginapi.PluginSymbol)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Plugin type: %s\n", reflect.TypeOf(sym))
+	p, ok := sym.(*pluginapi.Plugin)
+	if !ok {
+		return nil, fmt.Errorf("symbol \"Plugin\" not of type Plugin")
+	}
+
+	return p, nil
+
 }
