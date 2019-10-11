@@ -78,12 +78,16 @@ func getPluginObject(pl *plugin.Plugin) (*pluginapi.Plugin, error) {
 		return nil, err
 	}
 
-	fmt.Printf("Plugin type: %s\n", reflect.TypeOf(sym))
+	need := reflect.TypeOf(&pluginapi.Plugin{})
+	t := reflect.TypeOf(sym)
+	fmt.Printf("type of: %T\n", sym)
+	fmt.Printf("reflect type of: %v, want %v\n", t, need)
+	fmt.Printf("assignable? %t, convertable? %t\n", t.AssignableTo(need), t.ConvertibleTo(need))
+
 	p, ok := sym.(*pluginapi.Plugin)
 	if !ok {
 		return nil, fmt.Errorf("symbol \"Plugin\" not of type Plugin")
 	}
 
 	return p, nil
-
 }

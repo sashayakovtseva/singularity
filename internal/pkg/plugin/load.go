@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"plugin"
+	"reflect"
 	"strings"
 
 	pluginapi "github.com/sylabs/singularity/pkg/plugin"
@@ -101,6 +102,12 @@ func getPluginObject(pl *plugin.Plugin) (*pluginapi.Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	need := reflect.TypeOf(&pluginapi.Plugin{})
+	t := reflect.TypeOf(sym)
+	fmt.Printf("type of: %T\n", sym)
+	fmt.Printf("reflect type of: %v, want %v", t, need)
+	fmt.Printf("assignable? %t, convertable? %t\n", t.AssignableTo(need), t.ConvertibleTo(need))
 
 	p, ok := sym.(*pluginapi.Plugin)
 	if !ok {
