@@ -9,14 +9,13 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/sylabs/singularity/internal/pkg/test"
 )
 
 var cmd cobra.Command
 
 func TestEnvAppendValue(t *testing.T) {
-	test.DropPrivilege(t)
-	defer test.ResetPrivilege(t)
+	DropPrivilege(t)
+	defer ResetPrivilege(t)
 
 	cmd.Flags().BoolSlice("boolFlag", []bool{}, "")
 	if cmd.Flag("boolFlag").Value.String() != "[]" {
@@ -40,8 +39,8 @@ func TestEnvAppendValue(t *testing.T) {
 }
 
 func TestEnvSetValue(t *testing.T) {
-	test.DropPrivilege(t)
-	defer test.ResetPrivilege(t)
+	DropPrivilege(t)
+	defer ResetPrivilege(t)
 
 	cmd.Flags().Int("intFlag", 0, "")
 	if cmd.Flag("intFlag").Value.String() != "0" {

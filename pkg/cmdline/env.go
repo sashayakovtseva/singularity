@@ -7,10 +7,10 @@ package cmdline
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/spf13/pflag"
-	"github.com/sylabs/singularity/internal/pkg/sylog"
 )
 
 func setValue(flag *pflag.Flag, value string) error {
@@ -18,7 +18,7 @@ func setValue(flag *pflag.Flag, value string) error {
 		return fmt.Errorf("unable to set flag %s to value %s: %s", flag.Name, value, err)
 	}
 	flag.Changed = true
-	sylog.Debugf("Updated flag '%s' value to: %s", flag.Name, flag.Value)
+	log.Printf("Updated flag '%s' value to: %s", flag.Name, flag.Value)
 	return nil
 }
 

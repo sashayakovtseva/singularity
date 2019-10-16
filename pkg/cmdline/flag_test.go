@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/sylabs/singularity/internal/pkg/test"
 )
 
 var testString string
@@ -216,8 +215,8 @@ var ttData = []struct {
 }
 
 func TestCmdFlag(t *testing.T) {
-	test.DropPrivilege(t)
-	defer test.ResetPrivilege(t)
+	DropPrivilege(t)
+	defer ResetPrivilege(t)
 
 	var c struct{}
 	cmds := make(map[*cobra.Command]struct{})
